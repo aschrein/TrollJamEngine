@@ -1,4 +1,4 @@
-#include <engine/stdafx.h>
+#include <stdafx.h>
 #include <game/gui/Widgets.hpp>
 using namespace GUI;
 REGISTER_EVENT( Widget::WidgetEvent );

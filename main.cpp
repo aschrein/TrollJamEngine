@@ -1,15 +1,14 @@
-#include <engine/stdafx.h>
+#include <stdafx.h>
 #include <engine/os/Window.hpp>
 #include <engine/os/log.hpp>
-#include <engine/view/GUI.hpp>
 #include <engine/assets/FileManager.hpp>
 #include <engine/assets/Mesh.hpp>
 #include <engine/assets/Font.hpp>
-#include <engine/view/Camera.hpp>
-#include <engine/view/Renderer.hpp>
+#include <engine/graphics/Camera.hpp>
+#include <engine/graphics/Renderer.hpp>
+#include <Init.hpp>
 using namespace Math;
 using namespace Graphics;
-using namespace GUI;
 Material default_material;
 uint texture_handle = 0;
 FileManager *FileManager::singleton;
@@ -25,25 +24,7 @@ int main( int argc , char ** argv )
 	float camera_angle_thetha = 0.0f;
 	float camera_distance = 1.0f;
 	f3 camera_sight_point = { 0.0f , 0.0f , 0.0f };
-	//camera.lookAt( { 10.0f , 10.0f , 10.0f } , { 0.0f , 0.0f , 0.0f } , { 0.0f , 0.0f , 1.0f } );
-	//camera.calc();
-	
-	/*f3x3 mat;
-	mat( 0 , 0 ) = 0;
-	mat( 0 , 1 ) = 1;
-	mat( 1 , 0 ) = 3;
-	mat( 1 , 1 ) = 1;
-	mat( 2 , 2 ) = 1;
-	mat( 1 , 2 ) = 53;
-	mat( 2 , 1 ) = 77;
-	auto invmat = MatUtil::inv( mat );
-	auto p = invmat * mat;*/
 	i2 ms;
-	WindowWidget ww;
-	Button btn;
-	CornerResizer cr;
-	ww.addChild( &btn );
-	ww.addChild( &cr );
 	Renderer *renderer;
 	Signal init_signal;
 	
@@ -51,17 +32,8 @@ int main( int argc , char ** argv )
 	OS::Window window = OS::Window( { 100 , 100 , 512 , 512 ,
 		[ & ]()
 	{
-		renderer = window.create();
+		renderer = window.createRenderer();
 		init_signal.signal();
-		//ww.addAcceptor( new WndowResizer( &window ) );
-	} ,
-		[ & ]( WindowParam param, float dt )
-	{
-		/*Graphics2D g2d( { { 0 , 0 } ,{ param.width , param.height } } );
-		g2d.setColor( { 0x80 , 0x80 , 0x80 , 0xff } );
-		g2d.clear();
-		ww.draw( g2d );*/
-		
 	} ,
 		[]( int x , int y , int w , int h )
 	{
@@ -69,21 +41,16 @@ int main( int argc , char ** argv )
 	} ,
 		[ & ]()
 	{
-		ww.onDestroy();
 	} ,
 		[ & ]( OS::InputState::EventType type , OS::InputState::State const *state )
 	{
 		input_events.push( {*state , type} );
-		/*ww.consumeInput( OS::InputState::Event{ *state , type } );
-		*/
 	}
 	} );
 	Unique< Thread > update_thread = Thread::create(
 
 		[ & ]()
 	{
-		//ww.setWindow( &window );
-		//ww.onCreate();
 		OS::InputState::State old_state;
 		Allocator::zero( &old_state , 1 );
 		init_signal.wait();

@@ -1,11 +1,15 @@
-#include <engine/stdafx.h>
+#include <stdafx.h>
 #include <engine/os/Input.hpp>
 #include <engine/graphics/ogl/oglinclude.hpp>
+
 #include <engine/graphics/Graphics.hpp>
+#include <engine/graphics/ogl/RendererGL.hpp>
+
 #include <engine/os/Window.hpp>
 using namespace OS::InputState;
 using namespace Graphics;
 using namespace OS;
+using namespace GL;
 #include <iostream>
 #include <intrin.h>
 #include <GL/wglew.h>
@@ -213,16 +217,6 @@ void Window::run()
 		}
 		break;
 		}
-		//glViewport( 0 , 0 , param.width , param.height );
-		if( param.update_func )
-		{
-			/*if( timer.getDeltaTimeMs() < 10 )
-			{
-				Sleep( 10 - ( int )timer.getDeltaTimeMs() );
-			}*/
-			param.update_func( param , timer.getDeltaTime() );
-		}
-		
 	}
 	if( param.release_func )
 	{
@@ -233,10 +227,10 @@ i2 Window::getSize() const
 {
 	return{ param.width , param.height };
 }
-Renderer *Window::create( Allocators::Allocator *allocator )
+Renderer *Window::createRenderer( Allocators::Allocator *allocator )
 {
-	Renderer *rgl = allocator->alloc< Renderer >();
-	new( rgl ) Renderer();
+	RendererGL *rgl = allocator->alloc< RendererGL >();
+	new( rgl ) RendererGL();
 	rgl->allocator = allocator;
 	rgl->wnd = this;
 	rgl->working_flag.set();

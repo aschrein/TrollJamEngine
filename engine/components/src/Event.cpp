@@ -1,15 +1,19 @@
 #include <stdafx.h>
+#include <engine/components/Event.hpp>
 namespace EventSystem
 {
 	using namespace Collections;
-	int EVENT_TYPE_COUNTER = 0;
-	HashMap< String , int > ID_MAP;
-	Array< String > NAME_MAP;
+	extern int EVENT_TYPE_COUNTER;
+	extern HashMap< String , int > ID_MAP;
+	extern Array< String > NAME_MAP;
 	int Event::addEventType( String const &name )
 	{
 		if( !Allocators::Allocator::singleton )
 		{
 			Allocators::Allocator::singleton = new Allocators::Allocator();
+		}
+		if( NAME_MAP.getAllocator() == nullptr )
+		{
 			ID_MAP = HashMap< String , int >();
 			NAME_MAP = Array< String >();
 		}

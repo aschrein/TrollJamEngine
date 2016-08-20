@@ -4,11 +4,12 @@
 namespace OS
 {
 	using namespace OS::InputState;
+	using namespace Graphics;
+
 	struct WindowParam
 	{
 		int x , y , width , height;
 		std::function< void() > init_func;
-		std::function< void( WindowParam , float ) > update_func;
 		std::function< void( int , int , int , int ) > resize_func;
 		std::function< void() > release_func;
 		std::function< void( EventType , State const * ) > input_handler;
@@ -28,9 +29,8 @@ namespace OS
 		}
 		void setPosition( i2 const & );
 		void setSize( i2 const & );
-		//i4 getRect() const;
 		i2 getSize() const;
-		Renderer *create( Allocators::Allocator *allocator = Allocators::Allocator::singleton );
+		Renderer *createRenderer( Allocators::Allocator *allocator = Allocators::Allocator::singleton );
 		~Window();
 		void run();
 	};

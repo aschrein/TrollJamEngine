@@ -1,8 +1,8 @@
 #pragma once
-#include <data_struct\String.hpp>
-#include <data_struct\HashMap.hpp>
-#include <util\defines.hpp>
-#include <data_struct\Array.hpp>
+#include <engine/data_struct\String.hpp>
+#include <engine/data_struct\HashMap.hpp>
+#include <engine/util\defines.hpp>
+#include <engine/data_struct\Array.hpp>
 #define REGISTER_EVENT( name )\
 int name::id = Event::addEventType( #name );
 #define STD_EVENT_BODY \

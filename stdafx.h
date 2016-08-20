@@ -16,8 +16,6 @@
 #include <engine/os/Async.hpp>
 #include <engine/util/defines.hpp>
 #include <engine/os/log.hpp>
-#include <engine/util/Timer.hpp>
-#include <engine/util/Event.hpp>
 #include <engine/data_struct/LinkedList.hpp>
 #include <engine/data_struct/Buffer.hpp>
 #include <engine/math/vec.hpp>

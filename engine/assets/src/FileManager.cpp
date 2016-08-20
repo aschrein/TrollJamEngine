@@ -1,4 +1,4 @@
-#include <engine/stdafx.h>
+#include <stdafx.h>
 #include <engine/assets/BitMap.hpp>
 #include <engine/assets/FileManager.hpp>
 using namespace Collections;
@@ -67,7 +67,7 @@ void FileManager::mainLoop()
 {
 	OS::IO::debugLogln( "file manager started execution" );
 	
-	String dir_name = "assets";
+	String dir_name = "../../assets";
 #ifdef _WIN32
 	char buf[ 2048 ];
 	char filename[ MAX_PATH ];

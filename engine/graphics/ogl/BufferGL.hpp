@@ -1,10 +1,10 @@
 #pragma once
-#include <ogl/oglinclude.hpp>
+#include <engine/graphics/ogl/oglinclude.hpp>
 #include <engine/data_struct/Buffer.hpp>
 #include <malloc.h>
 #include <string.h>
-#include <view/Mesh.hpp>
-#include <ogl/AttributeArray.hpp>
+#include <engine/graphics/Graphics.hpp>
+#include <engine/graphics/ogl/AttributeArray.hpp>
 namespace GL
 {
 	using namespace Graphics;

@@ -1,23 +1,62 @@
 #include <stdafx.h>
-#include <ogl/oglinclude.hpp>
-#include <view/Graphics.hpp>
-#include <os/Window.hpp>
-#include <ogl/TextureGL.hpp>
-#include <ogl/ProgramGL.hpp>
-#include <ogl/BufferGL.hpp>
-#include <assets/FileManager.hpp>
-#include <view/Renderer.hpp>
-#include <view/Mesh.hpp>
+#include <engine/graphics/ogl/oglinclude.hpp>
+#include <engine/graphics/Graphics.hpp>
+#include <engine/os/Window.hpp>
+#include <engine/assets/FileManager.hpp>
+#include <engine/graphics/ogl/RendererGL.hpp>
 
 namespace Graphics
 {
 	using namespace Options;
 	using namespace GL;
-	static Array< TextureView > textures;
-	static Array< Buffer > buffers;
-	static Array< Program > programs;
-	//static Array< 
-	uint Renderer::pushCreationQueue( CreationDesc desc )
+	bool Renderer::isReady()
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		return thisgl->ready_flag.isSet();
+	}
+	void Renderer::wait()
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		//if( !ready_flag.isSet() )
+		{
+			thisgl->ready_signal.wait();
+		}
+		thisgl->ready_signal.reset();
+	}
+	Allocators::Allocator *Renderer::getAuxiliaryAllocator()
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		return thisgl->swap_auxiliary_allocator;
+	}
+	void Renderer::render()
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		thisgl->render_signal.signal();
+	}
+	void Renderer::pushCommand( CommandBuffer cmd_buffer )
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		thisgl->command_queue.push( cmd_buffer );
+	}
+	uint Renderer::createVertexBuffer( AttributeBufferDesc const *attribute_buffer_desc )
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		return thisgl->pushCreationQueue( { attribute_buffer_desc , CreationType::ATTRIBUTE_BUFFER } );
+	}
+	uint Renderer::createIndexBuffer( IndexBufferDesc *index_buffer_desc )
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		return thisgl->pushCreationQueue( { index_buffer_desc , CreationType::INDEX_BUFFER } );
+	}
+	uint Renderer::createTexture( TextureDesc const *bitmap )
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		return thisgl->pushCreationQueue( { bitmap , CreationType::TEXTURE } );
+	}
+}
+namespace GL
+{
+	uint RendererGL::pushCreationQueue( CreationDesc desc )
 	{
 		uint new_handler;
 		switch( desc.type )
@@ -36,7 +75,7 @@ namespace Graphics
 		creation_queue.push( desc );
 		return new_handler;
 	}
-	void Renderer::mainloop()
+	void RendererGL::mainloop()
 	{
 		Unique< FileConsumer > local_file_consumer( new FileConsumer() );
 		GL::Program program;

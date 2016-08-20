@@ -1,9 +1,9 @@
 #pragma once
-#include <data_struct/String.hpp>
-#include <data_struct/Array.hpp>
-#include <data_struct/HashSet.hpp>
-#include <util/Reflection.hpp>
-#include <data_struct/Buffer.hpp>
+#include <engine/data_struct/String.hpp>
+#include <engine/data_struct/Array.hpp>
+#include <engine/data_struct/HashSet.hpp>
+#include <engine/components/Reflection.hpp>
+#include <engine/data_struct/Buffer.hpp>
 class Object;
 using namespace Collections;
 class RTTI

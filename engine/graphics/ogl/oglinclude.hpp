@@ -1,8 +1,8 @@
 #pragma once
-#include <util/defines.hpp>
+#include <engine/util/defines.hpp>
 #include <GL/glew.h>
 #include <gl/GL.h>
-#include <os/log.hpp>
+#include <engine/os/log.hpp>
 #pragma comment( lib , "opengl32.lib" )
 #pragma comment( lib , "glew32.lib" )
 static void checkError( char const *mark = "anonimous mark" )
