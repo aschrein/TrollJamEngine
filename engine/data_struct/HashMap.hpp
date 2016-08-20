@@ -37,7 +37,7 @@ namespace Collections
 		}
 		bool contains( K const &key ) const
 		{
-			return contains( { key } );
+			return HashSet::contains( { key } );
 		}
 		Options::Result< V > get( K const &key )
 		{

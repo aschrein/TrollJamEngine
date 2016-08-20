@@ -5,7 +5,7 @@ namespace Allocators
 {
 	Allocator *Allocator::singleton = new Allocator();
 }
-int Object::ID_COUNTER = 0;
+uint64_t Object::ID_COUNTER = 0u;
 int RTTI::ID_COUNTER = 0;
 namespace EventSystem
 {

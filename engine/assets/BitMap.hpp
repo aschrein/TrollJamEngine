@@ -1,4 +1,5 @@
 #pragma once
+#include <engine/assets/FileManager.hpp>
 enum class MAGFilter : int
 {
 	NEAREST , LINEAR
@@ -21,7 +22,7 @@ enum class PixelMapping : int
 };
 struct BitMap2D
 {
-	void *data;
+	void const *data;
 	int width;
 	int height;
 	PixelMapping pixel_mapping;
@@ -63,3 +64,26 @@ struct TextureDesc
 	WrapRegime x_regime;
 	WrapRegime y_regime;
 };
+static BitMap2D mapTGA( ImmutableFileView const &file )
+{
+	BitMap2D out;
+	file.setPosition( 12 );
+	out.width = file.getInc< uint16_t >();
+	out.height = file.getInc< uint16_t >();
+	byte bpp = file.getInc< byte >();
+	out.data = ( uint8_t* )file.getRaw() + 18;
+	if( bpp == 8 )
+	{
+		out.pixel_type = PixelType::BYTE;
+		out.pixel_mapping = PixelMapping::R;
+	} else if( bpp == 16 )
+	{
+		out.pixel_type = PixelType::FIVE;
+		out.pixel_mapping = PixelMapping::BGRA;
+	} else
+	{
+		out.pixel_mapping = bpp == 32 ? PixelMapping::BGRA : PixelMapping::BGR;
+		out.pixel_type = PixelType::BYTE;
+	}
+	return out;
+}

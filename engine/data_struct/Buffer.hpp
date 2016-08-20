@@ -21,7 +21,7 @@ namespace Collections
 	class BufferView
 	{
 	protected:
-		int pos = 0;
+		mutable int pos = 0;
 		int limit = 0;
 		byte *data = nullptr;
 	public:
@@ -34,6 +34,10 @@ namespace Collections
 		{
 			return data;
 		}
+		void const *getRaw() const
+		{
+			return data;
+		}
 		template< typename T >
 		BufferView &put( T const &i )
 		{
@@ -42,13 +46,13 @@ namespace Collections
 			return *this;
 		}
 		template< typename T >
-		T get()
+		T get() const
 		{
 			pos -= sizeof( T );
 			return *( T* )( data + pos );
 		}
 		template< typename T >
-		T getInc()
+		T getInc() const
 		{
 			T val = *( T* )( data + pos );
 			pos += sizeof( T );
@@ -94,11 +98,11 @@ namespace Collections
 		{
 			return limit;
 		}
-		void reset()
+		void reset() const
 		{
 			pos = 0;
 		}
-		void setPosition( int p )
+		void setPosition( int p ) const
 		{
 			pos = p;
 		}

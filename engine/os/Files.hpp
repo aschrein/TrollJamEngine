@@ -10,14 +10,58 @@ namespace OS
 	namespace Files
 	{
 		using namespace Collections;
-		class FileImage : public BufferView
+		class ImmutableFileView
+		{
+		protected:
+			mutable uint pos = 0;
+			uint limit = 0;
+			byte const *data = nullptr;
+		public:
+			ImmutableFileView() = default;
+			ImmutableFileView( void const *data , uint limit ) :
+				data( ( byte const* )data ) ,
+				limit( limit )
+			{}
+			void const *getRaw() const
+			{
+				return data;
+			}
+			template< typename T >
+			T get() const
+			{
+				pos -= sizeof( T );
+				return *( T* )( data + pos );
+			}
+			template< typename T >
+			T getInc() const
+			{
+				T val = *( T* )( data + pos );
+				pos += sizeof( T );
+				return val;
+			}
+			uint getLimit() const
+			{
+				return limit;
+			}
+			void reset() const
+			{
+				pos = 0;
+			}
+			void setPosition( uint p ) const
+			{
+				pos = p;
+			}
+		};
+		class FileImage
 		{
 		private:
+			uint limit = 0;
+			byte *data = nullptr;
 			Allocator *allocator = Allocator::singleton;
 		public:
-
-			FileImage( Allocator *allocator , int size ) :
-				BufferView( allocator->alloc( size ) , size ) ,
+			FileImage( byte *data , Allocator *allocator , uint size ) :
+				data( data ) ,
+				limit( size ) ,
 				allocator( allocator )
 			{}
 			FileImage() = default;
@@ -29,6 +73,7 @@ namespace OS
 			}
 			FileImage &operator=( FileImage &&fi )
 			{
+				this->~FileImage();
 				this->allocator = fi.allocator;
 				this->data = fi.data;
 				this->limit = fi.limit;
@@ -37,12 +82,24 @@ namespace OS
 				fi.allocator = nullptr;
 				return *this;
 			}
+			FileImage copy( Allocator *allocator )
+			{
+				FileImage out;
+				out.allocator = allocator;
+				out.data = ( byte* )allocator->alloc( this->limit );
+				Allocator::copy< byte >( out.data , this->data , this->limit );
+				out.limit = this->limit;
+				return out;
+			}
+			ImmutableFileView const getView() const
+			{
+				return ImmutableFileView( data , limit );
+			}
 			~FileImage()
 			{
 				if( this->data )
 				{
 					allocator->free( this->data );
-					this->pos = 0;
 					this->limit = 0;
 				}
 			}

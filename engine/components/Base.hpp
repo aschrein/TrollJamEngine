@@ -4,8 +4,12 @@
 #include <engine/data_struct/HashSet.hpp>
 #include <engine/components/Reflection.hpp>
 #include <engine/data_struct/Buffer.hpp>
+#include <engine/graphics/Graphics.hpp>
+#include <engine/physics/Physics.hpp>
 class Object;
 using namespace Collections;
+using namespace Physics;
+using namespace EventSystem;
 class RTTI
 {
 private:
@@ -62,22 +66,97 @@ public:
 		return getId();
 	}
 };
-class Object
+class Scene
 {
 private:
-	static int ID_COUNTER;
-	int id;
+	Array< Object* > living_objects;
 public:
-	Object() :
-		id( ID_COUNTER++ )
+	void addEvent( Event * );
+	void subscribe( Object *obj , uint event_id );
+	void unsubscribe( Object *obj , uint event_id );
+	Array< Object* > getCollided( AABB const & );
+	Array< Object* > getCollided( Sphere const & );
+	Array< Object* > getObjectsByClassName( String const & );
+	Array< Object* > getObjectsByClassId( uint const & );
+};
+class GraphicsComponent
+{
+public:
+	virtual void draw( Object *object , Scene *scene , Graphics::CommandBuffer &cmd_buffer ) = 0;
+	virtual ~GraphicsComponent() {};
+};
+class PhysicsComponent
+{
+protected:
+	Array< PhysicsShape > shapes;
+	Object *object = nullptr;
+	AABB aabb;
+	PysicsBodyProperties prop;
+	PysicsBodyState state;
+	NONMOVABLE( PhysicsComponent );
+public:
+	PhysicsComponent( Object *obj , Allocator *allocator = Allocator::singleton ) :
+		object( obj )
+	{
+		shapes.setAllocator( allocator );
+	}
+	Array< PhysicsShape > const &getShapeInfo() const
+	{
+		return shapes;
+	}
+	Object *getObject()
+	{
+		return object;
+	}
+	void update( float dt )
+	{
+		state.pos += state.vel * dt;
+	}
+	void appendForce( f3 const &pos , f3 const &force , float dt )
+	{
+		state.vel += force * prop.invmass;
+	}
+	AABB getAABB() const
+	{
+		return aabb;
+	}
+	PysicsBodyProperties const &getPhysicsProperties() const
+	{
+		return prop;
+	}
+	PysicsBodyState &getPhysicsState()
+	{
+		return state;
+	}
+};
+class Object : public Acceptor
+{
+private:
+	static uint64_t ID_COUNTER;
+	uint64_t id;
+	PhysicsComponent *phys_component = nullptr;
+	GraphicsComponent *graphics_component = nullptr;
+public:
+	Object( GraphicsComponent *graphics_component , PhysicsComponent *phys_component ) :
+		id( ID_COUNTER++ ) ,
+		graphics_component( graphics_component ) ,
+		phys_component( phys_component  )
 	{}
 	virtual RTTI const *getRTTI() = 0;
-	int getId() const
+	uint64_t getId() const
 	{
 		return id;
 	}
-	int hash() const
+	uint hash() const
 	{
 		return getId();
+	}
+	GraphicsComponent *getGraphicsComponent()
+	{
+		return graphics_component;
+	}
+	PhysicsComponent *getPhysicsComponent()
+	{
+		return phys_component;
 	}
 };

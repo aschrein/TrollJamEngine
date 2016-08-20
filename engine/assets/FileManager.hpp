@@ -28,10 +28,10 @@ public:
 	};
 public:
 	String filename;
-	Result< FileImage > file_result;
+	Result< Shared< FileImage > > file_result;
 	EventType type;
 public:
-	FileEvent( String filename , EventType type , FileImage &&file_image ) :
+	FileEvent( String filename , EventType type , Shared< FileImage > file_image ) :
 		filename( filename ) ,
 		file_result( std::move( file_image ) ) ,
 		type( type )
@@ -50,37 +50,10 @@ public:
 typedef LockFree::Consumer< FileEvent > FileConsumer;
 class FileManager
 {
-private:
-	Allocator *allocator;
+protected:
 	NONMOVABLE( FileManager );
-	Unique< OS::Async::Thread > thread;
-	Signal signal;
-	AtomicFlag working_flag;
-	static const int MAX_PROMISES = 0x100;
-	HashMap< String , Array< FileConsumer* > > subscribers;
-	struct PromiseGiven
-	{
-		Array< String > filenames;
-		Allocator *allocator;
-	};
-	void addSubscriber( String filename , FileConsumer *update_acceptor )
-	{
-		auto res = subscribers.get( filename );
-		if( res.isPresent() )
-		{
-			res.getValue().push( update_acceptor );
-		} else
-		{
-			Array< FileConsumer* > sarr;
-			sarr.setAllocator( allocator );
-			sarr.push( update_acceptor );
-			subscribers.push( filename , std::move( sarr ) );
-		}
-	}
-	LockFree::RingBuffer< PromiseGiven , MAX_PROMISES > promise_pool;
 public:
 	static FileManager *singleton;
-	static BitMap2D mapTGA( FileImage *file );
 	static FileManager *create( Allocator *allocator = Allocator::singleton );
 	~FileManager();
 	void loadFile(
@@ -90,5 +63,4 @@ public:
 	);
 	void subscribe( Array< String > filenames , FileConsumer *update_acceptor );
 	void unsubscribe( Array< String > filenames , FileConsumer *update_acceptor );
-	void mainLoop();
 };

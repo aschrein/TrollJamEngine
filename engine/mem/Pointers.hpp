@@ -51,6 +51,10 @@ namespace Pointers
 		{
 			return ptr;
 		}
+		T const *get() const
+		{
+			return ptr;
+		}
 		operator bool() const
 		{
 			return ptr;

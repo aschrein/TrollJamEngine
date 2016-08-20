@@ -62,7 +62,7 @@ namespace EventSystem
 	class Acceptor
 	{
 	public:
-		virtual void accept( Event* , void *src ) = 0;
+		virtual void accept( Event* ) = 0;
 	};
 	class Notifier
 	{
@@ -79,14 +79,11 @@ namespace EventSystem
 			acceptors.removeFirst( acc );
 			return *this;
 		}
-		void notify( Event *event , void *src = nullptr )
+		void notify( Event *event )
 		{
 			for( auto acc : acceptors )
 			{
-				if( acc != src )
-				{
-					acc->accept( event , src );
-				}
+				acc->accept( event );
 			}
 		}
 	};

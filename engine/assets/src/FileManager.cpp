@@ -5,33 +5,43 @@ using namespace Collections;
 using namespace Options;
 using namespace Pointers;
 using namespace OS::Async;
-BitMap2D FileManager::mapTGA( FileImage *file )
+struct PromiseGiven
 {
-	BitMap2D out;
-	file->setPosition( 12 );
-	out.width = file->getInc< uint16_t >();
-	out.height = file->getInc< uint16_t >();
-	byte bpp = file->getInc< byte >();
-	out.data = ( uint8_t* )file->getRaw() + 18;
-	if( bpp == 8 )
+	Array< String > filenames;
+	FileConsumer *file_consumer;
+};
+class FileManagerImpl : public FileManager
+{
+public:
+	Allocator *allocator;
+	Unique< OS::Async::Thread > thread;
+	Signal signal;
+	AtomicFlag working_flag;
+	static const int MAX_PROMISES = 0x100;
+	HashMap< String , Array< FileConsumer* > > subscribers;
+	HashMap< String , Shared< FileImage > > present_files;
+	void addSubscriber( String filename , FileConsumer *update_acceptor )
 	{
-		out.pixel_type = PixelType::BYTE;
-		out.pixel_mapping = PixelMapping::R;
-	} else if( bpp == 16 )
-	{
-		out.pixel_type = PixelType::FIVE;
-		out.pixel_mapping = PixelMapping::BGRA;
-	} else
-	{
-		out.pixel_mapping = bpp == 32 ? PixelMapping::BGRA : PixelMapping::BGR;
-		out.pixel_type = PixelType::BYTE;
+		auto res = subscribers.get( filename );
+		if( res.isPresent() )
+		{
+			res.getValue().push( update_acceptor );
+		} else
+		{
+			Array< FileConsumer* > sarr;
+			sarr.setAllocator( allocator );
+			sarr.push( update_acceptor );
+			subscribers.push( filename , std::move( sarr ) );
+		}
 	}
-	return out;
-}
+	LockFree::RingBuffer< PromiseGiven , MAX_PROMISES > promise_pool;
+	void mainLoop();
+	FileManagerImpl() = default;
+};
 FileManager *FileManager::create( Allocator *allocator )
 {
-	FileManager *out = allocator->alloc< FileManager >();
-	new( out ) FileManager();
+	FileManagerImpl *out = allocator->alloc< FileManagerImpl >();
+	new( out ) FileManagerImpl();
 	out->working_flag.set();
 	out->allocator = allocator;
 	out->thread = OS::Async::Thread::create(
@@ -44,8 +54,9 @@ FileManager *FileManager::create( Allocator *allocator )
 }
 FileManager::~FileManager()
 {
-	working_flag.reset();
-	signal.signal();
+	FileManagerImpl *thisimpl = ( FileManagerImpl* )this;
+	thisimpl->working_flag.reset();
+	thisimpl->signal.signal();
 }
 void FileManager::loadFile(
 	Array< String > filenames ,
@@ -53,17 +64,14 @@ void FileManager::loadFile(
 	Allocator *allocator
 )
 {
+	FileManagerImpl *thisimpl = ( FileManagerImpl* )this;
 	PromiseGiven promise_given;
 	promise_given.filenames = filenames;
-	promise_given.allocator = allocator;
-	for( auto &filename : filenames )
-	{
-		addSubscriber( filename , update_acceptor );
-	}
-	promise_pool.push( promise_given );
-	signal.signal();
+	promise_given.file_consumer = update_acceptor;
+	thisimpl->promise_pool.push( promise_given );
+	thisimpl->signal.signal();
 }
-void FileManager::mainLoop()
+void FileManagerImpl::mainLoop()
 {
 	OS::IO::debugLogln( "file manager started execution" );
 	
@@ -91,22 +99,34 @@ void FileManager::mainLoop()
 			auto promise_given = promise_result.getValue();
 			for( auto const &filename : promise_given.filenames )
 			{
-				auto fres = OS::Files::load( dir_name + "/" + filename , promise_given.allocator );
-				if( fres.isPresent() )
+				addSubscriber( filename , promise_given.file_consumer );
+				if( present_files.contains( filename ) )
 				{
-					Array< FileConsumer* > consumers = subscribers.get( filename ).getValue();
-					for( auto &subscriber : consumers )
-					{
-						subscriber->pushEvent( { filename , FileEvent::EventType::LOADED , std::move( fres.getValue() ) } );
-					}
+					promise_given.file_consumer->pushEvent( { filename , FileEvent::EventType::LOADED , present_files.get( filename ).getValue() } );
 				} else
 				{
-					Array< FileConsumer* > consumers = subscribers.get( filename ).getValue();
-					for( auto &subscriber : consumers )
+					auto fres = OS::Files::load( dir_name + "/" + filename , allocator );
+					if( fres.isPresent() )
 					{
-						subscriber->pushEvent( { filename , FileEvent::EventType::FAILED } );
+						FileImage *file_image_ptr = allocator->alloc< FileImage >();
+						new( file_image_ptr ) FileImage( std::move( fres.getValue() ) );
+						Shared< FileImage > new_file( file_image_ptr , allocator );
+						present_files.push( filename , new_file );
+						Array< FileConsumer* > consumers = subscribers.get( filename ).getValue();
+						for( auto &subscriber : consumers )
+						{
+							subscriber->pushEvent( { filename , FileEvent::EventType::LOADED , new_file } );
+						}
+					} else
+					{
+						Array< FileConsumer* > consumers = subscribers.get( filename ).getValue();
+						for( auto &subscriber : consumers )
+						{
+							subscriber->pushEvent( { filename , FileEvent::EventType::FAILED } );
+						}
 					}
 				}
+				
 			}
 		}
 #ifdef _WIN32

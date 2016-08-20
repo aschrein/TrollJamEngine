@@ -6,9 +6,11 @@
 #include <engine/assets/Font.hpp>
 #include <engine/graphics/Camera.hpp>
 #include <engine/graphics/Renderer.hpp>
+
 #include <Init.hpp>
 using namespace Math;
 using namespace Graphics;
+
 Material default_material;
 uint texture_handle = 0;
 FileManager *FileManager::singleton;
@@ -59,8 +61,8 @@ int main( int argc , char ** argv )
 		int files = 4;
 		SimpleMesh3D mesh;
 		BMFontInfo font_bit_map_info;
-		FileImage font_bitmap;
-		FileImage head_bitmap;
+		Shared< FileImage > font_bitmap;
+		Shared< FileImage > head_bitmap;
 		BitMap2D tga_map;
 		BitMap2D head_map;
 		void *last_consumed = nullptr;
@@ -70,22 +72,22 @@ int main( int argc , char ** argv )
 			if( file_event.filename == "Suzanne.txt" )
 			{
 				auto file = std::move( file_event.file_result.getValue() );
-				mesh = parseSimpleMesh3d( ( char const * )file.getRaw() , allocator );
+				mesh = parseSimpleMesh3d( ( char const * )file->getView().getRaw() , allocator );
 				files--;
 			} else if( file_event.filename == "calibri_16.tga" )
 			{
 				font_bitmap = std::move( file_event.file_result.getValue() );
-				tga_map = FileManager::mapTGA( &font_bitmap );
+				tga_map = mapTGA( font_bitmap->getView() );
 				files--;
 			} else if( file_event.filename == "wood_texture.tga" )
 			{
 				head_bitmap = std::move( file_event.file_result.getValue() );
-				head_map = FileManager::mapTGA( &head_bitmap );
+				head_map = mapTGA( head_bitmap->getView() );
 				files--;
 			} else if( file_event.filename == "calibri_16.fnt" )
 			{
 				auto file = std::move( file_event.file_result.getValue() );
-				font_bit_map_info = parseBMFont( ( char const * )file.getRaw() );
+				font_bit_map_info = parseBMFont( ( char const * )file->getView().getRaw() );
 				files--;
 			}
 		}
@@ -295,9 +297,9 @@ int main( int argc , char ** argv )
 						model_matrix( 1 , 1 ) = 1;
 						model_matrix( 2 , 2 ) = 1;
 						model_matrix( 3 , 3 ) = 1;
-						model_matrix( 0 , 3 ) = i * 2;
-						model_matrix( 1 , 3 ) = j * 2;
-						model_matrix( 2 , 3 ) = -1;
+						model_matrix( 0 , 3 ) = i * 2 + camera_sight_point.x;
+						model_matrix( 1 , 3 ) = j * 2 + camera_sight_point.y;
+						model_matrix( 2 , 3 ) = camera_sight_point.z;
 						DrawMeshDesc *desc = ( DrawMeshDesc* )cmd_buffer.allocate( sizeof( DrawMeshDesc ) );
 						Allocator::copy( desc , &monkey_head_mesh , 1 );
 						desc->material = ( Material* )cmd_buffer.allocate( sizeof( Material ) );

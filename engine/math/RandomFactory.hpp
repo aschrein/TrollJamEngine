@@ -7,8 +7,8 @@ namespace Math
 	class RandomFactory
 	{
 	public:
-		typedef vec< 3 , T > vec3;
-		typedef vec< 2 , T > vec2;
+		typedef TVector< 3 , T > vec3;
+		typedef TVector< 2 , T > vec2;
 		static vec3 getRandomHalfSphere( float k )
 		{
 			float phi = MathUtil<T>::randomUniform() * Math<T>::PI * 2.0f;

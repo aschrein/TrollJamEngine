@@ -27,11 +27,11 @@ namespace OS
 				fseek( file , 0 , SEEK_END );
 				int size = ftell( file );
 				rewind( file );
-				FileImage file_image( allocator , size + 1 );
-				fread( file_image.getRaw() , 1 , size , file );
+				byte *data = allocator->alloc< byte >( size + 1 );
+				fread( data , 1 , size , file );
 				fclose( file );
-				( ( byte* )file_image.getRaw() )[ size ] = '\0';
-				return Options::Result< FileImage >( std::move( file_image ) );
+				( ( byte* )data )[ size ] = '\0';
+				return Options::Result< FileImage >( FileImage( data , allocator , size ) );
 			} else
 			{
 				return Options::Result< FileImage >();

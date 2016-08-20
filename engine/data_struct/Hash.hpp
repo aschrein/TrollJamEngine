@@ -5,7 +5,7 @@ namespace Collections
 	template< typename T >
 	struct Hash
 	{
-		static int hashFunc( T const &val )
+		static uint hashFunc( T const &val )
 		{
 			return val.hash();
 		}
@@ -13,15 +13,23 @@ namespace Collections
 	template<>
 	struct Hash< int >
 	{
-		static int hashFunc( int const &val )
+		static uint hashFunc( int const &val )
 		{
 			return Math::MathUtil< int >::abs( val );
 		}
 	};
 	template<>
+	struct Hash< uint >
+	{
+		static uint hashFunc( uint const &val )
+		{
+			return val;
+		}
+	};
+	template<>
 	struct Hash< size_t >
 	{
-		static int hashFunc( size_t const &val )
+		static uint hashFunc( size_t const &val )
 		{
 			return Math::MathUtil< size_t >::abs( val );
 		}
@@ -29,7 +37,7 @@ namespace Collections
 	template< typename T >
 	struct Hash< T * >
 	{
-		static int hashFunc( T * const &val )
+		static uint hashFunc( T * const &val )
 		{
 			return val->hash();
 		}

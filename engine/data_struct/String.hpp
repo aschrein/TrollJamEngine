@@ -191,15 +191,15 @@ namespace Collections
 			out += str;
 			return out;
 		}
-		int hash() const
+		uint hash() const
 		{
-			int hash = 0;
-			int i = 0;
+			uint hash = 0;
+			uint i = 0;
 			for( char c : chars )
 			{
-				hash += ( 0xff << ( i++ ) ) + c;
+				hash += ( 0xff << ( i++ ) ) + ( uint )c;
 			}
-			return Math::MathUtil< int >::abs( hash );
+			return hash;
 		}
 		bool operator<( String const &str ) const
 		{

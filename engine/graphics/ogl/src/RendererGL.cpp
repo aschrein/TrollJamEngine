@@ -4,7 +4,8 @@
 #include <engine/os/Window.hpp>
 #include <engine/assets/FileManager.hpp>
 #include <engine/graphics/ogl/RendererGL.hpp>
-
+#include <engine/assets/PipeLine.hpp>
+using namespace Assets;
 namespace Graphics
 {
 	using namespace Options;
@@ -81,8 +82,9 @@ namespace GL
 		GL::Program program;
 		String vert_filename = "shaders/simple.vs";
 		String frag_filename = "shaders/simple.fs";
+		//PipeLine< GL::Program > program_pipeline( );
 		FileManager::singleton->loadFile( { frag_filename , vert_filename } , local_file_consumer.get() );
-		FileImage frag_file , vert_file;
+		Shared< FileImage > frag_file , vert_file;
 		int files = 2;
 		while( files )
 		{
@@ -97,7 +99,7 @@ namespace GL
 				files--;
 			}
 		}
-		program = GL::Program::create( ( const char* )frag_file.getRaw() , ( const char* )vert_file.getRaw() , true ).getValue();
+		program = GL::Program::create( ( const char* )frag_file->getView().getRaw() , ( const char* )vert_file->getView().getRaw() , true ).getValue();
 		glEnable( GL_DEPTH_TEST );
 		glEnable( GL_BLEND );
 		glBlendFunc( GL_SRC_ALPHA , GL_ONE_MINUS_SRC_ALPHA );
