@@ -1,0 +1,26 @@
+#pragma once
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#include <functional>
+#include <engine/mem/Allocators.hpp>
+#include <engine/data_struct/Optional.hpp>
+#include <engine/data_struct/Tuple.hpp>
+#include <engine/data_struct/Buffer.hpp>
+#include <engine/data_struct/Array.hpp>
+#include <engine/data_struct/String.hpp>
+#include <engine/data_struct/HashSet.hpp>
+#include <engine/data_struct/HashMap.hpp>
+#include <engine/os/Atomic.hpp>
+#include <engine/mem/Pointers.hpp>
+#include <engine/os/Async.hpp>
+#include <engine/util/defines.hpp>
+#include <engine/os/log.hpp>
+#include <engine/util/Timer.hpp>
+#include <engine/util/Event.hpp>
+#include <engine/data_struct/LinkedList.hpp>
+#include <engine/data_struct/Buffer.hpp>
+#include <engine/math/vec.hpp>
+#include <engine/math/Math.hpp>
+#include <engine/math/mat.hpp>
+#include <engine/math/Quaternion.hpp>

@@ -1,0 +1,267 @@
+#include <util/Base.hpp>
+#include <os/Input.hpp>
+#include <Windows.h>
+#include <GL/glew.h>
+#include <gl/GL.h>
+#pragma comment( lib , "opengl32.lib" )
+#pragma comment( lib , "glew32.lib" )
+#include <util/Timer.hpp>
+#include <view/Graphics2D.hpp>
+#include <os/Window.hpp>
+#include <util/Timer.hpp>
+using namespace OS::InputState;
+using namespace Graphics;
+using namespace OS;
+#include <iostream>
+#include <stdint.h>
+#include <intrin.h>
+#include <omp.h>
+#include <os/Async.hpp>
+#include <os/log.hpp>
+#include <iostream>
+#include <windows.h>
+#include <GL/wglew.h>
+namespace OS
+{
+	void exit()
+	{
+		::exit( 0 );
+	}
+	namespace Async
+	{
+		void sleep( int milis )
+		{
+			Sleep( milis );
+		}
+	}
+	namespace IO
+	{
+		void STDIN::wait()
+		{
+			getchar();
+		}
+	}
+}
+uint64_t rdtsc()
+{
+	return __rdtsc();
+}
+/*#else
+uint64_t rdtsc()
+{
+	unsigned int lo , hi;
+	__asm__ __volatile__( "rdtsc" : "=a" ( lo ) , "=d" ( hi ) );
+	return ( ( uint64_t )hi << 32 ) | lo;
+}
+#endif*/
+CyclesTimer::CyclesTimer( char const *msg ) :
+	msg( msg ) ,
+	start( rdtsc() )
+{}
+CyclesTimer::~CyclesTimer()
+{
+	auto end = rdtsc();
+	std::cout << msg << " " << ( end - start ) << std::endl;
+}
+Timer::Timer()
+{
+	cur_time = last_time = omp_get_wtime();
+	dt = 0.0f;
+}
+double Timer::getDeltaTime() const
+{
+	return dt;
+}
+double Timer::getDeltaTimeMs() const
+{
+	return dt * 1.0e3;
+}
+void Timer::updateTime()
+{
+	cur_time = omp_get_wtime();
+	dt = cur_time - last_time;
+	last_time = cur_time;
+}
+LRESULT CALLBACK WndProc( HWND hWnd , UINT message , WPARAM wParam , LPARAM lParam )
+{
+	switch( message )
+	{
+	case WM_DESTROY: case WM_CLOSE:
+		PostQuitMessage( 0 );
+		break;
+	default:
+		return DefWindowProc( hWnd , message , wParam , lParam );
+	}
+	return 0;
+}
+struct WindowContext
+{
+	HWND hwnd;
+	HDC hdc;
+	HGLRC oglcontext;
+};
+Window::~Window()
+{
+	WindowContext *wcontext = ( WindowContext * )context;
+	wglDeleteContext( wcontext->oglcontext );
+	ReleaseDC( wcontext->hwnd , wcontext->hdc );
+	DeleteDC( wcontext->hdc );
+	delete wcontext;
+}
+void Window::run()
+{
+	WNDCLASS wc = { 0 };
+	wc.lpfnWndProc = WndProc;
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+	wc.hInstance = GetModuleHandle( NULL );
+	wc.hbrBackground = ( HBRUSH )( COLOR_WINDOW );
+	wc.lpszClassName = "minwindowsapp";
+	RegisterClass( &wc );
+	WindowContext *wcontext = new WindowContext();
+	context = wcontext;
+	wcontext->hwnd = CreateWindow( wc.lpszClassName , "Minimal Windows Application" ,
+		WS_POPUP | WS_VISIBLE , param.x , param.y , param.width , param.height , NULL , NULL , wc.hInstance , NULL );
+	wcontext->hdc = GetDC( wcontext->hwnd );
+	PIXELFORMATDESCRIPTOR pfd =
+	{
+		sizeof( PIXELFORMATDESCRIPTOR ) ,
+		1 ,
+		PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DIRECT3D_ACCELERATED | PFD_DOUBLEBUFFER ,
+		PFD_TYPE_RGBA ,
+		32 ,
+		0 , 0 , 0 , 0 , 0 , 0 ,
+		0 ,
+		0 ,
+		0 ,
+		0 , 0 , 0 , 0 ,
+		24 ,
+		8 ,
+		0 ,
+		PFD_MAIN_PLANE ,
+		0 ,
+		0 , 0 , 0
+	};
+	int pixel_format;
+	pixel_format = ChoosePixelFormat( wcontext->hdc , &pfd );
+	int nPixelFormat2;
+
+	BOOL bValidPixFormat;
+	UINT nMaxFormats = 1;
+	UINT nNumFormats;
+	float pfAttribFList[] = { 0, 0 };
+	int piAttribIList[] = {
+		WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+		WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+		WGL_COLOR_BITS_ARB, 32,
+		WGL_RED_BITS_ARB, 8,
+		WGL_GREEN_BITS_ARB, 8,
+		WGL_BLUE_BITS_ARB, 8,
+		WGL_ALPHA_BITS_ARB, 8,
+		WGL_DEPTH_BITS_ARB, 16,
+		WGL_STENCIL_BITS_ARB, 0,
+		WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
+		WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+		WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
+		WGL_SAMPLES_ARB, 16,
+		0, 0 };
+
+	bValidPixFormat = wglChoosePixelFormatARB( wcontext->hdc , piAttribIList , pfAttribFList , nMaxFormats , &nPixelFormat2 , &nNumFormats );
+	SetPixelFormat( wcontext->hdc , pixel_format , &pfd );
+	wcontext->oglcontext = wglCreateContext( wcontext->hdc );
+	glewExperimental = GL_TRUE;
+	wglMakeCurrent( wcontext->hdc , wcontext->oglcontext );
+	auto err = glewInit();
+	if( GLEW_OK != err )
+	{
+		std::cout << "glew error:" << glewGetErrorString( err );
+	}
+	if( param.init_func )
+	{
+		param.init_func();
+	}
+	Timer timer;
+	State input_state;
+	while( true )
+	{
+		MSG msg = { 0 };
+		PeekMessage( &msg , wcontext->hwnd , 0 , 0 , PM_REMOVE );
+		TranslateMessage( &msg );
+		DispatchMessage( &msg );
+		timer.updateTime();
+		switch( msg.message )
+		{
+		case WM_QUIT:
+			ShowWindow( wcontext->hwnd , SW_HIDE );
+			DestroyWindow( wcontext->hwnd );
+			break;
+		case WM_MOUSEMOVE:
+		{
+			int nx = LOWORD( msg.lParam );
+			int ny = HIWORD( msg.lParam );
+			input_state.ptr_pos.x = nx;
+			input_state.ptr_pos.y = ny;
+			if( param.input_handler != nullptr )
+			{
+				param.input_handler( EventType::PTR_MOVE , &input_state );
+			}
+		}
+		break;
+		case WM_LBUTTONDOWN:
+		{
+			input_state.ptr_key_state[ 0 ] = true;
+			if( param.input_handler != nullptr )
+			{
+				param.input_handler( EventType::PTR_DOWN , &input_state );
+			}
+		}
+		break;
+		case WM_LBUTTONUP:
+		{
+			input_state.ptr_key_state[ 0 ] = false;
+			if( param.input_handler != nullptr )
+			{
+				param.input_handler( EventType::PTR_UP , &input_state );
+			}
+		}
+		break;
+		case WM_SIZE:
+		{
+			if( param.resize_func )
+			{
+				RECT wndrect;
+				GetWindowRect( wcontext->hwnd , &wndrect );
+				param.width = wndrect.right - wndrect.left;
+				param.height = wndrect.bottom - wndrect.top;
+				param.x = wndrect.left;
+				param.y = wndrect.top;
+				param.resize_func( param.x , param.y , param.width , param.height );
+			}
+		}
+		break;
+		}
+		glViewport( 0 , 0 , param.width , param.height );
+		glClearColor( 0.5f , 0.5f , 0.5f , 1.0f );
+		glClearDepth( 1.0f );
+		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+		if( param.update_func )
+		{
+
+			if( timer.getDeltaTimeMs() < 10 )
+			{
+				Sleep( 10 - ( int )timer.getDeltaTimeMs() );
+			}
+			/*SetWindowPos( hwnd ,
+			HWND_TOP ,
+			param.x ,
+			param.y ,
+			param.width + 1 , param.height + 1 ,
+			SWP_SHOWWINDOW );*/
+			param.update_func( Graphics2D( { { 0 , 0 } , { param.width , param.height } } ) , param , timer.getDeltaTime() );
+		}
+		SwapBuffers( wcontext->hdc );
+	}
+	if( param.release_func )
+	{
+		param.release_func();
+	}
+}
