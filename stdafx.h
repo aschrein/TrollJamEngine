@@ -11,11 +11,8 @@
 #include <engine/data_struct/String.hpp>
 #include <engine/data_struct/HashSet.hpp>
 #include <engine/data_struct/HashMap.hpp>
-#include <engine/os/Atomic.hpp>
 #include <engine/mem/Pointers.hpp>
-#include <engine/os/Async.hpp>
 #include <engine/util/defines.hpp>
-#include <engine/os/log.hpp>
 #include <engine/data_struct/LinkedList.hpp>
 #include <engine/data_struct/Buffer.hpp>
 #include <engine/math/vec.hpp>

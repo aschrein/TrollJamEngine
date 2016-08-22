@@ -11,18 +11,18 @@ namespace Collections
 	{
 	public:
 		typedef BinaryTree< T > Chunk;
-		static const int MAX_ITEMS_PER_CHUNK = 10;
-		static const int INCREMENT = 10;
 	protected:
+		uint MAX_ITEMS_PER_CHUNK = 10;
+		uint INCREMENT = 10;
 		Allocator *allocator = Allocator::singleton;
 		Chunk *chunks = nullptr;
-		int chunks_count = 0;
-		int getChunkId( T const &val ) const
+		uint chunks_count = 0;
+		uint getChunkId( T const &val ) const
 		{
-			int hash = Hash< T >::hashFunc( val );
+			uint hash = Hash< T >::hashFunc( val );
 			return hash % chunks_count;
 		}
-		void init( int initial_chunks )
+		void init( uint initial_chunks )
 		{
 			release();
 			chunks_count = initial_chunks;
@@ -33,7 +33,15 @@ namespace Collections
 			}
 		}
 	public:
-		HashSet( int initial_chunks , Allocator *allocator ) :
+		void setMaxItemsPerChunk( uint mipc )
+		{
+			MAX_ITEMS_PER_CHUNK = mipc;
+		}
+		void setIncrement( uint inc )
+		{
+			INCREMENT = inc;
+		}
+		HashSet( uint initial_chunks , Allocator *allocator ) :
 			allocator( allocator )
 		{
 			init( initial_chunks );
@@ -155,7 +163,7 @@ namespace Collections
 		{
 			HashSet const *set;
 			TBinaryTreeItem< T > *cur_item;
-			int cur_chunk;
+			uint cur_chunk;
 			T &operator*()
 			{
 				return cur_item->value;

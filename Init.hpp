@@ -1,6 +1,7 @@
 #pragma once
 #include <engine/components/Base.hpp>
 #include <engine/components/Event.hpp>
+#include <engine/gui/Widgets.hpp>
 namespace Allocators
 {
 	Allocator *Allocator::singleton = new Allocator();
@@ -13,3 +14,4 @@ namespace EventSystem
 	HashMap< String , int > ID_MAP;
 	Array< String > NAME_MAP;
 }
+//REGISTER_EVENT( GUI::Widget::WidgetEvent );

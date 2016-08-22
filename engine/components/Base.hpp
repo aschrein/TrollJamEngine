@@ -66,6 +66,7 @@ public:
 		return getId();
 	}
 };
+class PysicalWorld;
 class Scene
 {
 private:
@@ -81,8 +82,15 @@ public:
 };
 class GraphicsComponent
 {
+protected:
+	Object *object = nullptr;
 public:
-	virtual void draw( Object *object , Scene *scene , Graphics::CommandBuffer &cmd_buffer ) = 0;
+	GraphicsComponent( Object *obj , Allocator *allocator = Allocator::singleton ) :
+		object( obj )
+	{
+	}
+	virtual void render( Object *object , Graphics::CommandBuffer &cmd_buffer ) = 0;
+	virtual AABB getBound() const = 0;
 	virtual ~GraphicsComponent() {};
 };
 class PhysicsComponent
@@ -116,7 +124,7 @@ public:
 	{
 		state.vel += force * prop.invmass;
 	}
-	AABB getAABB() const
+	AABB getBound() const
 	{
 		return aabb;
 	}
@@ -129,15 +137,49 @@ public:
 		return state;
 	}
 };
+class PysicalWorld
+{
+protected:
+	//QuadTree< PhysicsComponent* > components_tree; // separate by AABB or OBB?
+	//KDTree< PhysicsComponent* > components_tree;
+	NONMOVABLE( PysicalWorld );
+	Allocator *allocator;
+public:
+	Unique< PysicalWorld > create( Allocator *allocator = Allocator::singleton );
+	void update();
+	uint add( PhysicsComponent* );
+	void remove( uint );
+	Allocator *getAllocator()
+	{
+		return allocator;
+	}
+};
+class VisualWorld
+{
+protected:
+	//QuadTree< PhysicsComponent* > components_tree; // separate by AABB or OBB?
+	//KDTree< PhysicsComponent* > components_tree;
+	NONMOVABLE( VisualWorld );
+	Allocator *allocator;
+public:
+	Unique< VisualWorld > create( Allocator *allocator = Allocator::singleton );
+	void render();
+	int add( GraphicsComponent* );
+	void remove( uint );
+	Allocator *getAllocator()
+	{
+		return allocator;
+	}
+};
 class Object : public Acceptor
 {
 private:
 	static uint64_t ID_COUNTER;
 	uint64_t id;
-	PhysicsComponent *phys_component = nullptr;
-	GraphicsComponent *graphics_component = nullptr;
+	int phys_component = -1;
+	int graphics_component = -1;
 public:
-	Object( GraphicsComponent *graphics_component , PhysicsComponent *phys_component ) :
+	Object( int graphics_component , int phys_component ) :
 		id( ID_COUNTER++ ) ,
 		graphics_component( graphics_component ) ,
 		phys_component( phys_component  )
@@ -151,11 +193,11 @@ public:
 	{
 		return getId();
 	}
-	GraphicsComponent *getGraphicsComponent()
+	int getGraphicsComponent()
 	{
 		return graphics_component;
 	}
-	PhysicsComponent *getPhysicsComponent()
+	int getPhysicsComponent()
 	{
 		return phys_component;
 	}

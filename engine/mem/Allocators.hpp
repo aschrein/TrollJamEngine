@@ -7,27 +7,25 @@ namespace Allocators
 	{
 	public:
 		static Allocator *singleton;
-		//static Collections::HashSet< size_t > allocated_pointers;
 	public:
-		virtual void *alloc( size_t size , int alignment = 4 )
+		virtual void *alloc( size_t size , uint alignment = 4 )
 		{
 			auto out = _aligned_malloc( size , alignment );
-			//allocated_pointers.push( ( size_t )out );
 			return out;
 		}
 		template< typename T >
 		T *alloc( uint count = 1 )
 		{
-			T * out = ( T* )alloc( sizeof( T ) * count );
+			T * out = ( T* )alloc( sizeof( T ) * count , sizeof( T ) );
 			return out;
 		}
 		template< typename T >
-		T *allocArray( int count )
+		T *allocArray( uint count )
 		{
-			void *ptr = alloc( count * sizeof( T ) + 4 );
-			*( int* )ptr = count;
+			void *ptr = alloc( count * sizeof( T ) + 4 , sizeof( T ) );
+			*( uint* )ptr = count;
 			T *obj = ( T* )( ( byte* )ptr + 4 );
-			for( int i = 0; i < count; i++ )
+			for( uint i = 0; i < count; i++ )
 			{
 				new( obj + i ) T();
 			}
@@ -42,8 +40,8 @@ namespace Allocators
 		template< typename T >
 		void freeArray( T *ptr )
 		{
-			int count = *( int* )( ( byte* )ptr - 4 );
-			for( int i = 0; i < count; i++ )
+			uint count = *( uint* )( ( byte* )ptr - 4 );
+			for( uint i = 0; i < count; i++ )
 			{
 				ptr[ i ].~T();
 			}
@@ -51,25 +49,17 @@ namespace Allocators
 		}
 		virtual void free( void *ptr )
 		{
-			//allocated_pointers.remove( ( size_t )ptr );
 			::_aligned_free( ptr );
 		}
 		template< typename T >
-		static void copy( T *dst , T const *src , int count )
+		static void copy( T *dst , T const *src , uint count )
 		{
 			memcpy( dst , src , count * sizeof( T ) );
 		}
 		template< typename T >
-		static void zero( T *dst , int count = 1 )
+		static void zero( T *dst , uint count = 1 )
 		{
 			memset( dst , 0 , count * sizeof( T ) );
-		}
-		virtual void reset()
-		{
-			/*for( auto &ptr : allocated_pointers )
-			{
-				free( ( void* )ptr );
-			}*/
 		}
 	};
 	class LinearAllocator : public Allocator
@@ -93,12 +83,12 @@ namespace Allocators
 		{
 			base_ptr = ( byte* )_aligned_malloc( size , 0x100 );
 		}
-		void *alloc( size_t size , int alignment = 4 ) override
+		void *alloc( size_t size , uint alignment = 4 ) override
 		{
+			uint mask = ~( ( ~alignment ) + 1 );
 			size_t ptr = ( size_t )( ( byte* )base_ptr + cur_pos );
-			size_t offset = ( ptr + 4 ) & 0x7;
+			size_t offset = alignment - ( ptr & mask );
 			ptr += offset;
-			//ptr = ( void *)( ( size_t )ptr + offset );
 			cur_pos += size + offset;
 			return ( void * )ptr;
 		}
@@ -106,79 +96,73 @@ namespace Allocators
 		{
 
 		}
-		void reset() override
+		void reset()
 		{
 			cur_pos = 0;
 		}
 	};
-	/*class StaticAllocator : public Allocator
+	class PoolAllocator : public Allocator
 	{
 		struct MemRange
 		{
 			MemRange *next = nullptr;
 			int offset = 0;
 			int size = 0;
-			bool free;
 		};
 	private:
 		byte *base_ptr;
 		int size;
-		int range_count;
 		MemRange *root;
-		MemRange *getNewRangeStruct()
-		{
-			ito( range_count )
-			{
-				if( root[ i ].offset < -1 )
-				{
-					return root + i;
-				}
-			}
-			range_count++;
-			return root + range_count - 1;
-		}
-		void freeRangeStruct( MemRange *rs )
-		{
-			rs->offset = -1;
-		}
+		MemRange *free_root;
+		MemRange *free_tail;
+		MemRange *captured_root = nullptr;
+		MemRange *captured_tail = nullptr;
+		uint range_counter = 1;
 	public:
-		StaticAllocator( int pages ):
-			size( pages * 4096 + 1000 * sizeof( MemRange ) )
+		PoolAllocator( uint pages , uint max_ranges ):
+			size( pages * 4096 + max_ranges * sizeof( MemRange ) )
 		{
-			base_ptr = ( byte* )malloc( size );
-			root = ( MemRange* )( base_ptr + 1000 * sizeof( MemRange ) );
-			root->next = nullptr;
-			root->free = true;
-			root->offset = 0;
-			root->size = size;
+			base_ptr = ( byte* )Allocator::singleton->alloc( size , 0x100 );
+			root = free_tail = free_root = ( MemRange* )( base_ptr + pages * 4096 );
+			free_root->next = nullptr;
+			free_root->offset = 0;
+			free_root->size = size;
 		}
-		void *alloc( size_t size , int alignment = 4 ) override
+		void *alloc( size_t size , uint alignment = 4 ) override
 		{
-			MemRange *cur = root;
+			MemRange *cur = free_root;
+			MemRange *last = nullptr;
+			uint mask = ~( ( ~alignment ) + 1 );
+			size = size + ( alignment - ( size & mask ) );
 			while( cur != nullptr )
 			{
-				if( cur->free )
+				if( cur->size > size )
 				{
-					if( cur->size > size )
+					MemRange *new_range = root + range_counter++;
+					if( !new_range )
 					{
-						MemRange *new_range = getNewRangeStruct();
-						new_range->next = cur->next;
-						new_range->free = true;
-						new_range->offset = cur->offset + size;
-						new_range->size = cur->size - size;
-						cur->size = size;
-						cur->next = new_range;
-						cur->free = false;
-						return cur->offset + base_ptr;
-					} else if( cur->size == size )
-					{
-						cur->free = false;
-						cur->offset + base_ptr;
+						return nullptr;
 					}
-				} else
+					new_range->next = cur->next;
+					new_range->offset = cur->offset + size;
+					new_range->size = cur->size - size;
+					cur->size = size;
+					cur->next = new_range;
+					return cur->offset + base_ptr;
+				} else if( cur->size == size )
 				{
-					cur = cur->next;
+					last->next = cur->next;
+					if( captured_tail == nullptr )
+					{
+						captured_tail = cur;
+					} else
+					{
+						captured_tail->next = cur;
+						captured_tail = cur;
+					}
 				}
+				last = cur;
+				cur = cur->next;
 			}
 			return nullptr;
 		}
@@ -211,12 +195,8 @@ namespace Allocators
 				cur = cur->next;
 			}
 		}
-		byte *resize( byte *ptr , int new_size )
-		{
-
-		}
 	};
-	struct ThreadLocalAllocator
+	/*struct ThreadLocalAllocator
 	{
 		static __declspec( thread ) StaticAllocator *static_allocator;
 		template< typename T >

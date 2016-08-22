@@ -1,9 +1,9 @@
 #pragma once
 #ifndef ito
-#define ito( x ) for( int i = 0; i < x; i++ )
+#define ito( x ) for( uint i = 0; i < x; i++ )
 #endif
 #ifndef jto
-#define jto( x ) for( int j = 0; j < x; j++ )
+#define jto( x ) for( uint j = 0; j < x; j++ )
 #endif
 #ifndef xfor
 #define xfor( x , n ) for( int x = 0; x < n; x++ )

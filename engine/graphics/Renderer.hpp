@@ -23,6 +23,6 @@ namespace Graphics
 		void freeVertexBuffer( uint vb );
 		void freeIndexBuffer( uint ib );
 		void freeTexture( uint tx );
-		~Renderer();
+		//~Renderer();
 	};
 }

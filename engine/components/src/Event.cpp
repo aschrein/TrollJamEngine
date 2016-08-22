@@ -8,15 +8,6 @@ namespace EventSystem
 	extern Array< String > NAME_MAP;
 	int Event::addEventType( String const &name )
 	{
-		if( !Allocators::Allocator::singleton )
-		{
-			Allocators::Allocator::singleton = new Allocators::Allocator();
-		}
-		if( NAME_MAP.getAllocator() == nullptr )
-		{
-			ID_MAP = HashMap< String , int >();
-			NAME_MAP = Array< String >();
-		}
 		int new_id = EVENT_TYPE_COUNTER++;
 		ID_MAP.push( name , new_id );
 		NAME_MAP.push( name );

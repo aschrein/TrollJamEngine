@@ -155,7 +155,7 @@ namespace Math
 		CALLMOD TVector( TVector< H , T > const &v1 , TVector< N - H , T > const &v2 )
 		{
 			ito( H )
-				DATA[ i ] = v[ i ];
+				DATA[ i ] = v1[ i ];
 			ito( N - H )
 				DATA[ i + H ] = v2[ i ];
 		}

@@ -25,27 +25,27 @@ namespace Math
 		}
 		static vec3 getRandomOnSphereArea()
 		{
-			float phi = getRandom() * PI * 2.0f;
-			float cp = std::cos( phi );
-			float sp = std::sin( phi );
-			float ct = 2.0f * getRandom() - 1.0f;
-			float st = std::sqrt( 1.0f - ct * ct );
+			float phi = MathUtil<T>::randomUniform() * MathUtil<T>::PI * 2.0f;
+			float cp = MathUtil<T>::cos( phi );
+			float sp = MathUtil<T>::sin( phi );
+			float ct = 2.0f * MathUtil<T>::randomUniform() - 1.0f;
+			float st = MathUtil<T>::sqrt( 1.0f - ct * ct );
 			return vec3( st * cp , st * sp , ct );
 		}
 		static vec3 getRandomInSphere()
 		{
-			float phi = getRandom() * PI * 2.0f;
-			float cp = std::cos( phi );
-			float sp = std::sin( phi );
-			float ct = 2.0f * getRandom() - 1.0f;
-			float st = std::sqrt( 1.0f - ct * ct );
-			return sqrtf( getRandom() ) * vec3( st * cp , st * sp , ct );
+			float phi = MathUtil<T>::randomUniform() * MathUtil<T>::PI * 2.0f;
+			float cp = MathUtil<T>::cos( phi );
+			float sp = MathUtil<T>::sin( phi );
+			float ct = 2.0f * MathUtil<T>::randomUniform() - 1.0f;
+			float st = MathUtil<T>::sqrt( 1.0f - ct * ct );
+			return sqrtf( MathUtil<T>::randomUniform() ) * vec3( st * cp , st * sp , ct );
 		}
 		static vec2 getRandomCircle()
 		{
-			float phi = getRandom() * PI * 2.0f;
-			float r = powf( getRandom() , 0.5f );
-			return vec2( cos( phi ) , sin( phi ) ) * r;
+			float phi = MathUtil<T>::randomUniform() * MathUtil<T>::PI * 2.0f;
+			float r = powf( MathUtil<T>::randomUniform() , 0.5f );
+			return vec2( MathUtil<T>::cos( phi ) , MathUtil<T>::sin( phi ) ) * r;
 		}
 		static vec3 getReflected( vec3 const &v , vec3 const &n )
 		{

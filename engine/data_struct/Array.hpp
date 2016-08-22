@@ -26,16 +26,20 @@ namespace Collections
 	class Array : public Collection< Array , T >
 	{
 	protected:
-		static const int INCREMENT = 20;
+		uint INCREMENT = 20;
 		Allocator *allocator = Allocator::singleton;
 		T *data = nullptr;
-		int size = 0;
-		int real_size = 0;
+		uint size = 0;
+		uint real_size = 0;
 		bool copy_on_write = false;
 	public:
 		Allocator *getAllocator()
 		{
 			return allocator;
+		}
+		void setIncrement( uint inc )
+		{
+			INCREMENT = inc;
 		}
 		typedef T Type;
 		Array &setAllocator( Allocator *allocator )
@@ -69,7 +73,7 @@ namespace Collections
 		{
 			*this = rval;
 		}
-		Array( T const *ptr , int N )
+		Array( T const *ptr , uint N )
 		{
 			make_space( N );
 			ito( N )
@@ -77,7 +81,7 @@ namespace Collections
 				data[ i ] = ptr[ i ];
 			}
 		}
-		static Array createView( T const *ptr , int N , Allocator *allocator = Allocator::singleton )
+		static Array createView( T const *ptr , uint N , Allocator *allocator = Allocator::singleton )
 		{
 			Array out;
 			out.data = const_cast< T * >( ptr );
@@ -149,7 +153,7 @@ namespace Collections
 		struct ArrayIterator
 		{
 			Array const *array;
-			int pos;
+			uint pos;
 			T &operator*()
 			{
 				return *( array->data + pos );
@@ -202,12 +206,8 @@ namespace Collections
 		{
 			return{ this , size };
 		}
-		void make_space( int new_size )
+		void make_space( uint new_size )
 		{
-			if( new_size < 0 )
-			{
-				new_size = 0;
-			}
 			if( new_size < size )
 			{
 				for( int i = new_size; i < size; i++ )
@@ -217,8 +217,8 @@ namespace Collections
 			}
 			if( new_size > real_size )
 			{
-				int new_real_size = new_size + INCREMENT;
-				int s = sizeof( T );
+				uint new_real_size = new_size + INCREMENT;
+				uint s = sizeof( T );
 				T *new_data = ( T* )allocator->alloc( new_real_size * sizeof( T ) );
 				//allocator->zero( new_data , ( size ) );
 				if( data != nullptr )
@@ -236,7 +236,7 @@ namespace Collections
 				real_size = new_real_size;
 			} else if( new_size < real_size - INCREMENT )
 			{
-				int new_real_size = new_size;
+				uint new_real_size = new_size;
 				T *new_data = ( T * )allocator->alloc( new_real_size * sizeof( T ) );
 				if( data != nullptr )
 				{
@@ -261,7 +261,7 @@ namespace Collections
 			}
 			//size = new_size;
 		}
-		void remove( int indx )
+		void remove( uint indx )
 		{
 			if( indx >= size )
 			{
@@ -272,7 +272,7 @@ namespace Collections
 			make_space( size - 1 );
 			size--;
 		}
-		void removeShift( int indx )
+		void removeShift( uint indx )
 		{
 			resetCopyOnWrite();
 			for( int i = indx; i < size - 1; i++ )
@@ -351,19 +351,19 @@ namespace Collections
 			out += rval;
 			return out;
 		}
-		void cut( int start , int end )
+		void cut( uint start , uint end )
 		{
-			int len = end - start;
-			for( int i = end; i < size; i++ )
+			uint count = end - start;
+			for( uint i = start; i < size - count; i++ )
 			{
-				data[ i - len ] = data[ i ];
+				data[ i ] = data[ i + count ];
 			}
-			size -= len;
+			size -= count;
 		}
-		void insert( int start , int length , Array const &arr )
+		void insert( uint start , uint length , Array const &arr )
 		{
 			make_space( size + length );
-			for( int i = size + length - 1; i >= start; i-- )
+			for( uint i = size + length - 1; i >= start; i-- )
 			{
 				data[ i ] = data[ i - length ];
 			}
@@ -399,7 +399,7 @@ namespace Collections
 		{
 			return getSize() == 0;
 		}
-		int getSize() const
+		uint getSize() const
 		{
 			return size;
 		}
