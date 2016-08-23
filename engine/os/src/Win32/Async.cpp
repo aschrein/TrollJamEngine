@@ -1,5 +1,6 @@
 #include <stdafx.h>
 #include <omp.h>
+#include <engine/os/Async.hpp>
 namespace OS
 {
 	void exit()

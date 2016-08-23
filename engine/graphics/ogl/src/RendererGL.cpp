@@ -109,6 +109,7 @@ namespace GL
 
 		while( working_flag.isSet() )
 		{
+			//glFinish();
 			window_size = wnd->getSize();
 			glViewport( 0 , 0 , window_size.x , window_size.y );
 			{
@@ -226,7 +227,7 @@ wait_section:
 			swap_auxiliary_allocator = tmp;
 			swap_auxiliary_allocator->reset();
 			//OS::IO::debugLogln( "render thread swaped command buffer" );
-			glFinish();
+			
 			ready_flag.set();
 			ready_signal.signal();
 			render_signal.wait();

@@ -39,7 +39,7 @@ namespace Math
 			float sp = MathUtil<T>::sin( phi );
 			float ct = 2.0f * MathUtil<T>::randomUniform() - 1.0f;
 			float st = MathUtil<T>::sqrt( 1.0f - ct * ct );
-			return sqrtf( MathUtil<T>::randomUniform() ) * vec3( st * cp , st * sp , ct );
+			return MathUtil<T>::sqrt( MathUtil<T>::randomUniform() ) * vec3( st * cp , st * sp , ct );
 		}
 		static vec2 getRandomCircle()
 		{

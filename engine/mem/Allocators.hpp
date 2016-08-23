@@ -1,8 +1,11 @@
 #pragma once
 #include <stdlib.h>
 #include <engine/util/defines.hpp>
+#include <engine/math/Math.hpp>
+#include <engine/os/log.hpp>
 namespace Allocators
 {
+	using namespace Math;
 	class Allocator
 	{
 	public:
@@ -16,13 +19,13 @@ namespace Allocators
 		template< typename T >
 		T *alloc( uint count = 1 )
 		{
-			T * out = ( T* )alloc( sizeof( T ) * count , sizeof( T ) );
+			T * out = ( T* )alloc( sizeof( T ) * count );
 			return out;
 		}
 		template< typename T >
 		T *allocArray( uint count )
 		{
-			void *ptr = alloc( count * sizeof( T ) + 4 , sizeof( T ) );
+			void *ptr = alloc( count * sizeof( T ) + 4 );
 			*( uint* )ptr = count;
 			T *obj = ( T* )( ( byte* )ptr + 4 );
 			for( uint i = 0; i < count; i++ )
@@ -103,115 +106,140 @@ namespace Allocators
 	};
 	class PoolAllocator : public Allocator
 	{
-		struct MemRange
-		{
-			MemRange *next = nullptr;
-			int offset = 0;
-			int size = 0;
-		};
 	private:
-		byte *base_ptr;
-		int size;
-		MemRange *root;
-		MemRange *free_root;
-		MemRange *free_tail;
-		MemRange *captured_root = nullptr;
-		MemRange *captured_tail = nullptr;
-		uint range_counter = 1;
-	public:
-		PoolAllocator( uint pages , uint max_ranges ):
-			size( pages * 4096 + max_ranges * sizeof( MemRange ) )
+		byte *base_ptr = nullptr;
+		int limit = 0;
+		int first_free_range = 0;
+		int occupied_space = 0;
+		int* headToTail( int *head )
 		{
-			base_ptr = ( byte* )Allocator::singleton->alloc( size , 0x100 );
-			root = free_tail = free_root = ( MemRange* )( base_ptr + pages * 4096 );
-			free_root->next = nullptr;
-			free_root->offset = 0;
-			free_root->size = size;
+			return ( int* )( size_t( head ) + MathUtil< int >::abs( *head ) + 4 );
+		}
+		int* headToNextHead( int *head )
+		{
+			return ( int* )( size_t( head ) + MathUtil< int >::abs( *head ) + 8 );
+		}
+		int* headToPrevTail( int *head )
+		{
+			return ( int* )( size_t( head ) - 4 );
+		}
+		int* tailToHead( int *tail )
+		{
+			return ( int* )( size_t( tail ) - MathUtil< int >::abs( *tail ) - 4 );
+		}
+	public:
+		PoolAllocator( uint pages )
+		{
+			init( pages );
+		}
+		~PoolAllocator()
+		{
+			release();
+		}
+		void init( uint pages )
+		{
+			release();
+			limit = pages * 0x1000;
+			base_ptr = ( byte* )Allocator::singleton->alloc( pages * 0x1000 , 0x1000 );
+			int *free_range_root = ( int * )base_ptr;
+			*free_range_root = -limit + 8;
+			int *free_range_tail = ( int * )( size_t( base_ptr ) + limit - 4 );
+			*free_range_tail = -limit + 8;
+			first_free_range = 0;
+		}
+		void release()
+		{
+			if( base_ptr )
+			{
+				Allocator::free( base_ptr );
+			}
+			base_ptr = nullptr;
+			limit = 0;
+			first_free_range = 0;
 		}
 		void *alloc( size_t size , uint alignment = 4 ) override
 		{
-			MemRange *cur = free_root;
-			MemRange *last = nullptr;
-			uint mask = ~( ( ~alignment ) + 1 );
-			size = size + ( alignment - ( size & mask ) );
-			while( cur != nullptr )
+			int *cur = ( int * )( base_ptr + first_free_range );
+			bool first_range = true;
+			int isize = -int( size + 4 - ( size & 3 ) );
+			while( true )
 			{
-				if( cur->size > size )
+				uint offset = uint( size_t( cur ) - size_t( base_ptr ) );
+				if( *cur <= isize && *cur > isize - 8 )
 				{
-					MemRange *new_range = root + range_counter++;
-					if( !new_range )
+					int *block_tail = headToTail( cur );
+					*cur = -*cur;
+					*block_tail = -*block_tail;
+					if( first_range )
 					{
-						return nullptr;
+						first_free_range = uint( size_t( block_tail ) + 4 - size_t( base_ptr ) );
 					}
-					new_range->next = cur->next;
-					new_range->offset = cur->offset + size;
-					new_range->size = cur->size - size;
-					cur->size = size;
-					cur->next = new_range;
-					return cur->offset + base_ptr;
-				} else if( cur->size == size )
+					occupied_space += -isize + 8;
+					return ( void* )( size_t( cur ) + 4 );
+				} else if( *cur < isize - 8 )
 				{
-					last->next = cur->next;
-					if( captured_tail == nullptr )
+					
+					int old_size = *cur;
+					int rest = old_size - isize + 8;
+					*headToTail( cur ) = rest;
+					*cur = -isize;
+					auto tail = headToTail( cur );
+					*tail = -isize;
+					auto new_head = tail + 1;
+					*new_head = rest;
+					
+					if( first_range )
 					{
-						captured_tail = cur;
-					} else
-					{
-						captured_tail->next = cur;
-						captured_tail = cur;
+						first_free_range = uint( size_t( new_head ) - size_t( base_ptr ) );
 					}
+					occupied_space += -isize + 8;
+					return ( void* )( size_t( cur ) + 4 );
+				} else
+				{
+					first_range = false;
+					cur = ( int* )( size_t( cur ) + Math::MathUtil< int >::abs( *cur ) + 8 );
 				}
-				last = cur;
-				cur = cur->next;
 			}
 			return nullptr;
 		}
 		void free( void *ptr ) override
 		{
-			int offset = ( byte* )ptr - base_ptr;
-			MemRange *cur = root;
-			MemRange *last = nullptr;
-			while( cur != nullptr )
+			int *cur_head = ( int * )( size_t( ptr ) - 4 );
+			int *cur_tail = headToTail( cur_head );
+			*cur_tail = -*cur_tail;
+			*cur_head = -*cur_head;
+			occupied_space += *cur_tail;
+			if( size_t( cur_head ) != size_t( base_ptr ) )
 			{
-				if( cur->offset == offset )
+				int *last_tail = headToPrevTail( cur_head );
+				if( *last_tail < 0 )
 				{
-					cur->free = true;
+					int *last_head = tailToHead( last_tail );
+					int new_size = *last_head + *cur_head - 8;
+					*last_head = new_size;
+					*cur_tail = new_size;
+					cur_head = last_head;
+					occupied_space -= 8;
 				}
-				if( cur->next && cur->next->free )
+			}
+			if( size_t( cur_tail ) + 4 < size_t( base_ptr ) + limit )
+			{
+				int *next_head = headToNextHead( cur_head );
+				if( *next_head < 0 )
 				{
-					auto tmp = cur->next;
-					cur->next = tmp->next;
-					cur->size += tmp->size;
-					freeRangeStruct( tmp );
+					int *next_tail = headToTail( next_head );
+					int new_size = *next_head + *cur_head - 8;
+					*cur_head = new_size;
+					*next_tail = new_size;
+					occupied_space -= 8;
 				}
-				if( last && last->free )
-				{
-					auto tmp = cur;
-					last->next = tmp->next;
-					last->size += tmp->size;
-					freeRangeStruct( tmp );
-				}
-				last = cur;
-				cur = cur->next;
+			}
+			uint offset = uint( size_t( cur_head ) - size_t( base_ptr ) );
+			
+			if( offset < first_free_range )
+			{
+				first_free_range = offset;
 			}
 		}
 	};
-	/*struct ThreadLocalAllocator
-	{
-		static __declspec( thread ) StaticAllocator *static_allocator;
-		template< typename T >
-		static T *alloc()
-		{
-			return alloc< T >( 1 );
-		}
-		template< typename T >
-		static T *alloc( int count )
-		{
-			return ( T *)static_allocator->alloc( count * sizeof( T ) );
-		}
-		static void free( void *ptr )
-		{
-			static_allocator->free( ptr );
-		}
-	};*/
 }
