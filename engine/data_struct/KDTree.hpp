@@ -1,6 +1,7 @@
 #pragma once
 #pragma once
 #include <engine/data_struct/Array.hpp>
+#include <engine/data_struct/HashSet.hpp>
 #include <engine/mem/Allocators.hpp>
 #include <engine/math/vec.hpp>
 namespace Collections
@@ -12,6 +13,14 @@ namespace Collections
 		typedef TVector< K * 2 , Real > Bound;
 		T value;
 		Bound bound;
+		uint hash() const
+		{
+			return Hash< T >::hashFunc( value );
+		}
+		bool operator<( KDTreeItem const &item ) const
+		{
+			return value < item.value;
+		}
 		bool operator==( KDTreeItem const &item ) const
 		{
 			return value == item.value;
@@ -167,7 +176,7 @@ namespace Collections
 			}
 		}
 		template< template< typename > typename Container >
-		void getCollided( Bound const &bound , Container< T > &out )
+		void getCollided( Bound const &bound , Container< KDTreeItem< T , Real , K > > &out )
 		{
 			if( container )
 			{
@@ -175,7 +184,7 @@ namespace Collections
 				{
 					if( collide( item.bound , bound ) )
 					{
-						out.push( item.value );
+						out.push( item );
 					}
 				}
 			} else
@@ -213,10 +222,12 @@ namespace Collections
 		{
 			root->remove( { value , bound } );
 		}
-		template< template< typename > typename Container >
-		void getCollided( Bound const &bound , Container< T > &out )
+		HashSet< KDTreeItem< T , Real , K > > getCollided( Bound const &bound , Allocator *allocator = Allocator::singleton )
 		{
+			HashSet< KDTreeItem< T , Real , K > > out;
+			out.setAllocator( allocator );
 			root->getCollided( bound , out );
+			return out;
 		}
 	};
 }

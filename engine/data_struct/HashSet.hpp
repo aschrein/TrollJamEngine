@@ -41,6 +41,11 @@ namespace Collections
 		{
 			INCREMENT = inc;
 		}
+		void setAllocator( Allocator *allocator )
+		{
+			release();
+			this->allocator = allocator;
+		}
 		HashSet( uint initial_chunks , Allocator *allocator ) :
 			allocator( allocator )
 		{
@@ -62,10 +67,11 @@ namespace Collections
 			{
 				push( item );
 			}
+			return *this;
 		}
 		HashSet( HashSet &&set )
 		{
-			*this = set;
+			*this = std::move( set );
 		}
 		HashSet &operator=( HashSet &&set )
 		{

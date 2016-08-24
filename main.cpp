@@ -91,7 +91,7 @@ int main( int argc , char ** argv )
 				files--;
 			}
 		}
-		{
+		/*{
 			{
 				AttributeBufferDesc *attribute_buffer_desc = allocator->alloc< AttributeBufferDesc >();
 				attribute_buffer_desc->data = mesh.positions.getPtr();
@@ -213,10 +213,10 @@ int main( int argc , char ** argv )
 				plane_mesh.start_index = 0;
 				plane_mesh.primitive_type = PrimitiveType::TRIANGLES;
 			}
-		}
+		}*/
 		while( true )
 		{
-			f3 camera_dir = f3{
+			/*f3 camera_dir = f3{
 				MathUtil< float >::cos( camera_angle_thetha ) * MathUtil< float >::cos( camera_angle_phi ) ,
 				MathUtil< float >::cos( camera_angle_thetha ) * MathUtil< float >::sin( camera_angle_phi ) ,
 				MathUtil< float >::sin( camera_angle_thetha )
@@ -276,11 +276,6 @@ int main( int argc , char ** argv )
 				f4x4 lview_proj = Camera::perspectiveLookAt( camera_sight_point + camera_distance * camera_dir ,
 				camera_sight_point ,
 				{ 0.0f , 0.0f , 1.0f } , 0.01f , 10000.0f , 1.0f , 1.0f );
-				/*f4x4 orthographic;
-				orthographic( 0 , 0 ) = 1;
-				orthographic( 1 , 1 ) = 1;
-				orthographic( 2 , 2 ) = 1;
-				orthographic( 3 , 3 ) = 1;*/
 				f4x4 *view_proj = ( f4x4 * )cmd_buffer.allocate( sizeof( f4x4 ) );
 				Allocator::copy( view_proj , &lview_proj , 1 );
 				cmd_buffer.push( { CommandType::SET_VIEW_PROJ , 0 , view_proj } );
@@ -344,10 +339,10 @@ int main( int argc , char ** argv )
 					Allocator::copy( desc->transform , &model_matrix , 1 );
 					cmd_buffer.push( { CommandType::DRAW_INDEXED_MESH , 0 , desc } );
 				}
-			}
+			}*/
 			renderer->wait();
 			//OS::IO::debugLogln( "update thread woked up" );
-			renderer->pushCommand( cmd_buffer );
+			//renderer->pushCommand( cmd_buffer );
 			renderer->render();
 		}
 	}

@@ -19,6 +19,7 @@ namespace OS
 	private:
 #ifdef _WIN32
 		HWND hwnd;
+		HINSTANCE hinstance;
 		HDC hdc;
 #endif
 		WindowParam param;

@@ -5,11 +5,77 @@
 #include <engine/assets/FileManager.hpp>
 #include <engine/graphics/ogl/RendererGL.hpp>
 #include <engine/assets/PipeLine.hpp>
+using namespace GL;
+#include <GL/wglew.h>
 using namespace Assets;
+namespace OS
+{
+	Renderer *Window::createRenderer( Allocators::Allocator *allocator )
+	{
+		RendererGL *rgl = allocator->alloc< RendererGL >();
+		new( rgl ) RendererGL();
+		rgl->allocator = allocator;
+		rgl->wnd = this;
+		rgl->working_flag.set();
+		rgl->hdc = hdc;
+		PIXELFORMATDESCRIPTOR pfd =
+		{
+			sizeof( PIXELFORMATDESCRIPTOR ) ,
+			1 ,
+			PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DIRECT3D_ACCELERATED | PFD_DOUBLEBUFFER ,
+			PFD_TYPE_RGBA ,
+			32 ,
+			0 , 0 , 0 , 0 , 0 , 0 ,
+			0 ,
+			0 ,
+			0 ,
+			0 , 0 , 0 , 0 ,
+			24 ,
+			8 ,
+			0 ,
+			PFD_MAIN_PLANE ,
+			0 ,
+			0 , 0 , 0
+		};
+		int pixel_format;
+		pixel_format = ChoosePixelFormat( hdc , &pfd );
+		SetPixelFormat( hdc , pixel_format , &pfd );
+		rgl->oglcontext = wglCreateContext( hdc );
+		rgl->thread = Thread::create(
+			[ = ]()
+		{
+			wglMakeCurrent( hdc , rgl->oglcontext );
+			glewExperimental = GL_TRUE;
+			auto err = glewInit();
+			if( GLEW_OK != err )
+			{
+				std::cout << "glew error:" << glewGetErrorString( err );
+			}
+			wglSwapIntervalEXT( 1 );
+			rgl->mainloop();
+			wglDeleteContext( rgl->oglcontext );
+		} , Allocator::singleton
+		);
+		return rgl;
+	}
+}
 namespace Graphics
 {
-	using namespace Options;
-	using namespace GL;
+	uint Renderer::createVertexBuffer( AttributeBufferDesc const *attribute_buffer_desc )
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		return thisgl->pushCreationQueue( { attribute_buffer_desc , CreationType::ATTRIBUTE_BUFFER } );
+	}
+	uint Renderer::createIndexBuffer( IndexBufferDesc *index_buffer_desc )
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		return thisgl->pushCreationQueue( { index_buffer_desc , CreationType::INDEX_BUFFER } );
+	}
+	uint Renderer::createTexture( TextureDesc const *bitmap )
+	{
+		RendererGL* thisgl = ( RendererGL* )this;
+		return thisgl->pushCreationQueue( { bitmap , CreationType::TEXTURE } );
+	}
 	bool Renderer::isReady()
 	{
 		RendererGL* thisgl = ( RendererGL* )this;
@@ -38,21 +104,6 @@ namespace Graphics
 	{
 		RendererGL* thisgl = ( RendererGL* )this;
 		thisgl->command_queue.push( cmd_buffer );
-	}
-	uint Renderer::createVertexBuffer( AttributeBufferDesc const *attribute_buffer_desc )
-	{
-		RendererGL* thisgl = ( RendererGL* )this;
-		return thisgl->pushCreationQueue( { attribute_buffer_desc , CreationType::ATTRIBUTE_BUFFER } );
-	}
-	uint Renderer::createIndexBuffer( IndexBufferDesc *index_buffer_desc )
-	{
-		RendererGL* thisgl = ( RendererGL* )this;
-		return thisgl->pushCreationQueue( { index_buffer_desc , CreationType::INDEX_BUFFER } );
-	}
-	uint Renderer::createTexture( TextureDesc const *bitmap )
-	{
-		RendererGL* thisgl = ( RendererGL* )this;
-		return thisgl->pushCreationQueue( { bitmap , CreationType::TEXTURE } );
 	}
 }
 namespace GL
@@ -100,6 +151,20 @@ namespace GL
 			}
 		}
 		program = GL::Program::create( ( const char* )frag_file->getView().getRaw() , ( const char* )vert_file->getView().getRaw() , true ).getValue();
+		TextureDesc desc;
+		BitMap2D bitmap;
+		byte data[] = { 0x0000ff };
+		bitmap.data = data;
+		bitmap.height = 1;
+		bitmap.width = 1;
+		bitmap.pixel_mapping = PixelMapping::RGB;
+		bitmap.pixel_type = PixelType::BYTE;
+		desc.bitmap = bitmap;
+		desc.mag_filter = MAGFilter::NEAREST;
+		desc.min_filter = MINFilter::NONE;
+		desc.x_regime = WrapRegime::CLAMP;
+		desc.y_regime = WrapRegime::CLAMP;
+		TextureView black_texture = Texture2D::create( &desc );
 		glEnable( GL_DEPTH_TEST );
 		glEnable( GL_BLEND );
 		glBlendFunc( GL_SRC_ALPHA , GL_ONE_MINUS_SRC_ALPHA );
@@ -204,6 +269,24 @@ namespace GL
 							vbo.bind();
 						}
 						ibo.bind();
+						glClearStencil( 0 );
+						glClear( GL_STENCIL_BUFFER_BIT );
+						glEnable( GL_STENCIL_TEST );
+						glStencilFunc( GL_ALWAYS , 1 , -1 );
+						glStencilOp( GL_KEEP , GL_KEEP , GL_REPLACE );
+						glPolygonMode( GL_FRONT_AND_BACK , GL_FILL );
+						glDrawElements(
+							desc->primitive_type == PrimitiveType::TRIANGLES ?
+							GL_TRIANGLES :
+							GL_QUADS ,
+							desc->count ,
+							ibo.index_type
+							, ( void* )( desc->start_index * ibo.index_size ) );
+						glStencilFunc( GL_NOTEQUAL , 1 , -1 );
+						glStencilOp( GL_KEEP , GL_KEEP , GL_REPLACE );
+						glLineWidth( 4 );
+						glPolygonMode( GL_FRONT_AND_BACK , GL_LINE );
+						black_texture.bind( 0 , glGetUniformLocation( program.prog , "albedo" ) );
 						glDrawElements(
 							desc->primitive_type == PrimitiveType::TRIANGLES ?
 							GL_TRIANGLES :

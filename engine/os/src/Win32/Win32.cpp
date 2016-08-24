@@ -7,12 +7,11 @@
 
 #include <engine/os/Window.hpp>
 using namespace OS::InputState;
-using namespace Graphics;
 using namespace OS;
-using namespace GL;
+
 #include <iostream>
 #include <intrin.h>
-#include <GL/wglew.h>
+
 #include <engine/os/Files.hpp>
 namespace OS
 {
@@ -78,6 +77,7 @@ void Window::run()
 	wc.lpfnWndProc = WndProc;
 	wc.style = CS_HREDRAW | CS_VREDRAW;
 	wc.hInstance = GetModuleHandle( NULL );
+	this->hinstance = wc.hInstance;
 	wc.hbrBackground = ( HBRUSH )( COLOR_WINDOW );
 	wc.lpszClassName = "minwindowsapp";
 	RegisterClass( &wc );
@@ -226,54 +226,6 @@ void Window::run()
 i2 Window::getSize() const
 {
 	return{ param.width , param.height };
-}
-Renderer *Window::createRenderer( Allocators::Allocator *allocator )
-{
-	RendererGL *rgl = allocator->alloc< RendererGL >();
-	new( rgl ) RendererGL();
-	rgl->allocator = allocator;
-	rgl->wnd = this;
-	rgl->working_flag.set();
-	rgl->hdc = hdc;
-	PIXELFORMATDESCRIPTOR pfd =
-	{
-		sizeof( PIXELFORMATDESCRIPTOR ) ,
-		1 ,
-		PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DIRECT3D_ACCELERATED | PFD_DOUBLEBUFFER ,
-		PFD_TYPE_RGBA ,
-		32 ,
-		0 , 0 , 0 , 0 , 0 , 0 ,
-		0 ,
-		0 ,
-		0 ,
-		0 , 0 , 0 , 0 ,
-		24 ,
-		8 ,
-		0 ,
-		PFD_MAIN_PLANE ,
-		0 ,
-		0 , 0 , 0
-	};
-	int pixel_format;
-	pixel_format = ChoosePixelFormat( hdc , &pfd );
-	SetPixelFormat( hdc , pixel_format , &pfd );
-	rgl->oglcontext = wglCreateContext( hdc );
-	rgl->thread = Thread::create(
-		[ = ]()
-	{
-		wglMakeCurrent( hdc , rgl->oglcontext );
-		glewExperimental = GL_TRUE;
-		auto err = glewInit();
-		if( GLEW_OK != err )
-		{
-			std::cout << "glew error:" << glewGetErrorString( err );
-		}
-		wglSwapIntervalEXT( 1 );
-		rgl->mainloop();
-		wglDeleteContext( rgl->oglcontext );
-	} , Allocator::singleton
-	);
-	return rgl;
 }
 void Window::setPosition( i2 const &pos )
 {

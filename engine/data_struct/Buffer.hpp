@@ -18,6 +18,80 @@ namespace Collections
 			return data[ i ];
 		}
 	};
+	template< typename T , int N >
+	struct LocalArray
+	{
+		T data[ N ];
+		uint size = 0;
+		inline T const &operator[]( int i ) const
+		{
+			return data[ i ];
+		}
+		inline T &operator[]( int i )
+		{
+			return data[ i ];
+		}
+		void push( T const &value )
+		{
+			data[ size++ ] = value;
+		}
+		struct ArrayIterator
+		{
+			LocalArray *array;
+			uint pos;
+			T &operator*()
+			{
+				return *( array->data + pos );
+			}
+			T *operator->()
+			{
+				return ( array->data + pos );
+			}
+			T const &operator*() const
+			{
+				return *( array->data + pos );
+			}
+			T const *operator->() const
+			{
+				return ( array->data + pos );
+			}
+			ArrayIterator operator++( int )
+			{
+				pos++;
+				return *this;
+			}
+			ArrayIterator operator++()
+			{
+				ArrayIterator out = *this;
+				pos++;
+				return out;
+			}
+			bool operator==( ArrayIterator const &a ) const
+			{
+				return pos == a.pos;
+			}
+			bool operator!=( ArrayIterator const &a ) const
+			{
+				return pos != a.pos;
+			}
+		};
+		ArrayIterator begin()
+		{
+			return{ this , 0 };
+		}
+		ArrayIterator begin() const
+		{
+			return{ this , 0 };
+		}
+		ArrayIterator end()
+		{
+			return{ this , size };
+		}
+		ArrayIterator end() const
+		{
+			return{ this , size };
+		}
+	};
 	class BufferView
 	{
 	protected:
