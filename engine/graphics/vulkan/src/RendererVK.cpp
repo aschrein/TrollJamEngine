@@ -272,7 +272,7 @@ namespace OS
 								OS::IO::debugLogln( "error while querying swap chains images" );
 								return;
 							}
-							/*for( auto &image : rvk->swap_chain_images )
+							for( auto &image : rvk->swap_chain_images )
 							{
 								VkImageViewCreateInfo image_view_info;
 								Allocator::zero( &image_view_info );
@@ -289,11 +289,13 @@ namespace OS
 								image_view_info.subresourceRange.layerCount = 1;
 								image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
 								{
-									VkImageSubresourceRange subresource_range = {};
+									VkImageSubresourceRange subresource_range;
 									subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 									subresource_range.baseMipLevel = 0;
 									subresource_range.levelCount = 1;
 									subresource_range.layerCount = 1;
+									subresource_range.baseArrayLayer = 0;
+									image_view_info.subresourceRange = subresource_range;
 								}
 								image_view_info.image = image;
 								VkImageView image_view;
@@ -304,7 +306,7 @@ namespace OS
 									return;
 								}
 								rvk->swap_chain_images_views.push( image_view );
-							}*/
+							}
 						}
 						{
 							VkSemaphoreCreateInfo semaphore_create_info;
@@ -314,7 +316,6 @@ namespace OS
 							semaphore_create_info.flags = 0;
 							vkCreateSemaphore( rvk->dev , &semaphore_create_info , nullptr , &rvk->semaphores.present_complete );
 							vkCreateSemaphore( rvk->dev , &semaphore_create_info , nullptr , &rvk->semaphores.render_complete );
-
 						}
 						{
 							VkCommandPoolCreateInfo command_pool_create_info = {};
@@ -341,7 +342,230 @@ namespace OS
 								OS::IO::debugLogln( "error while allocating command buffers" );
 								return;
 							}
+						}
+						{
+							VkAttachmentDescription attachment_desc;
+							Allocator::zero( &attachment_desc );
+							attachment_desc.format = rvk->color_format;
+							attachment_desc.samples = VK_SAMPLE_COUNT_1_BIT;
+							attachment_desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+							attachment_desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+							attachment_desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+							attachment_desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+							attachment_desc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+							attachment_desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+							VkAttachmentReference attachment_reference;
+							Allocator::zero( &attachment_reference );
+							attachment_reference.attachment = 0;
+							attachment_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+							VkSubpassDescription subpass_desc;
+							Allocator::zero( &subpass_desc );
+							subpass_desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+							subpass_desc.colorAttachmentCount = 1;
+							subpass_desc.pColorAttachments = &attachment_reference;
+							VkRenderPassCreateInfo render_pass_info;
+							Allocator::zero( &render_pass_info );
+							render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+							render_pass_info.attachmentCount = 1;
+							render_pass_info.pAttachments = &attachment_desc;
+							render_pass_info.subpassCount = 1;
+							render_pass_info.pSubpasses = &subpass_desc;
+							auto res = vkCreateRenderPass( rvk->dev , &render_pass_info , nullptr , &rvk->render_pass );
+							if( res != VK_SUCCESS )
 							{
+								OS::IO::debugLogln( "error while creating render pass" );
+								return;
+							}
+							ito( rvk->swap_chain_images.size )
+							{
+								VkFramebufferCreateInfo frame_buffer_create_info;
+								Allocator::zero( &frame_buffer_create_info );
+								frame_buffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+								frame_buffer_create_info.renderPass = rvk->render_pass;
+								frame_buffer_create_info.attachmentCount = 1;
+								frame_buffer_create_info.pAttachments = &rvk->swap_chain_images_views[ i ];
+								frame_buffer_create_info.width = 512;
+								frame_buffer_create_info.height = 512;
+								frame_buffer_create_info.layers = 1;
+								VkFramebuffer frame_buffer;
+								res = vkCreateFramebuffer( rvk->dev , &frame_buffer_create_info , nullptr , &frame_buffer );
+								if( res != VK_SUCCESS )
+								{
+									OS::IO::debugLogln( "error while creating frame buffer" );
+									return;
+								}
+								rvk->frame_buffer_per_image.push( frame_buffer );
+							}
+						}
+						{
+							FileConsumer *local_consumer = Allocator::singleton->alloc< FileConsumer >();
+							new( local_consumer ) FileConsumer();
+							Unique< FileConsumer > local_file_consumer( local_consumer , Allocator::singleton );
+							String vert_filename = "shaders/vk/vert.spv";
+							String frag_filename = "shaders/vk/frag.spv";
+							FileManager::singleton->loadFile( { frag_filename , vert_filename } , local_file_consumer.get() );
+							Shared< FileImage > frag_file , vert_file;
+							int files = 2;
+							while( files )
+							{
+								FileEvent file_event = local_file_consumer->popEvent( true ).getValue();
+								if( file_event.filename == vert_filename )
+								{
+									vert_file = std::move( file_event.file_result.getValue() );
+									files--;
+								} else if( file_event.filename == frag_filename )
+								{
+									frag_file = std::move( file_event.file_result.getValue() );
+									files--;
+								}
+							}
+							OS::IO::debugLogln( "spirv shaders loaded" );
+							{
+								VkShaderModuleCreateInfo shader_module_create_info;
+								Allocator::zero( &shader_module_create_info );
+								shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+								shader_module_create_info.codeSize = vert_file->getView().getLimit();
+								shader_module_create_info.pCode = ( const uint32_t* )vert_file->getView().getRaw();
+								auto res = vkCreateShaderModule( rvk->dev , &shader_module_create_info , nullptr , &rvk->vert_shader );
+								if( res != VK_SUCCESS )
+								{
+									OS::IO::debugLogln( "error while creating vertex shader module" );
+									return;
+								}
+							}
+							{
+								VkShaderModuleCreateInfo shader_module_create_info;
+								Allocator::zero( &shader_module_create_info );
+								shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+								shader_module_create_info.codeSize = frag_file->getView().getLimit();
+								shader_module_create_info.pCode = ( const uint32_t* )frag_file->getView().getRaw();
+								auto res = vkCreateShaderModule( rvk->dev , &shader_module_create_info , nullptr , &rvk->frag_shader );
+								if( res != VK_SUCCESS )
+								{
+									OS::IO::debugLogln( "error while creating fragment shader module" );
+									return;
+								}
+							}
+							{
+								VkPipelineShaderStageCreateInfo infos[] =
+								{
+									{
+										VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO ,
+										nullptr ,
+										0 ,
+										VK_SHADER_STAGE_VERTEX_BIT ,
+										rvk->vert_shader ,
+										"main" ,
+										nullptr
+									} ,
+									{
+										VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO ,
+										nullptr ,
+										0 ,
+										VK_SHADER_STAGE_FRAGMENT_BIT ,
+										rvk->frag_shader ,
+										"main" ,
+										nullptr
+									}
+								};
+								VkPipelineVertexInputStateCreateInfo vertex_state_create_info;
+								Allocator::zero( &vertex_state_create_info );
+								vertex_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+								VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info;
+								Allocator::zero( &input_assembly_create_info );
+								input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+								input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+								input_assembly_create_info.primitiveRestartEnable = VK_FALSE;
+								VkViewport viewport =
+								{
+									0.0f , 0.0f , 512.0f , 512.0f , 0.0f , 1.0f
+								};
+								VkRect2D scissor =
+								{
+									{ 0 , 0 } ,
+									{ 512 , 512 }
+								};
+								VkPipelineViewportStateCreateInfo view_port_create_info;
+								Allocator::zero( &view_port_create_info );
+								view_port_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+								view_port_create_info.viewportCount = 1;
+								view_port_create_info.pViewports = &viewport;
+								view_port_create_info.scissorCount = 1;
+								view_port_create_info.pScissors = &scissor;
+								VkPipelineRasterizationStateCreateInfo rasterizer_state_create_info;
+								Allocator::zero( &rasterizer_state_create_info );
+								rasterizer_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+								rasterizer_state_create_info.polygonMode = VK_POLYGON_MODE_FILL;
+								rasterizer_state_create_info.cullMode = VK_CULL_MODE_NONE;
+								rasterizer_state_create_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+								rasterizer_state_create_info.lineWidth = 1.0f;
+								VkPipelineMultisampleStateCreateInfo multisample_state_create_info;
+								Allocator::zero( &multisample_state_create_info );
+								multisample_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+								multisample_state_create_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+								multisample_state_create_info.minSampleShading = 1.0f;
+								VkPipelineColorBlendAttachmentState blender_state;
+								Allocator::zero( &blender_state );
+								blender_state.blendEnable = VK_FALSE;
+								blender_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+								blender_state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+								blender_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+								blender_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+								blender_state.colorBlendOp = VK_BLEND_OP_ADD;
+								blender_state.alphaBlendOp = VK_BLEND_OP_ADD;
+								blender_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+								VkPipelineColorBlendStateCreateInfo blend_state_create_info;
+								Allocator::zero( &blend_state_create_info );
+								blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+								blend_state_create_info.logicOp = VK_LOGIC_OP_COPY;
+								blend_state_create_info.attachmentCount = 1;
+								blend_state_create_info.pAttachments = &blender_state;
+								VkPipelineLayoutCreateInfo pipeline_layout_create_info;
+								Allocator::zero( &pipeline_layout_create_info );
+								pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+								VkPipelineLayout pipeline_layout;
+								auto res = vkCreatePipelineLayout( rvk->dev , &pipeline_layout_create_info , nullptr , &pipeline_layout );
+								if( res != VK_SUCCESS )
+								{
+									OS::IO::debugLogln( "error while creating pipeline layout" );
+									return;
+								}
+								VkGraphicsPipelineCreateInfo pipeline_create_info;
+								Allocator::zero( &pipeline_create_info );
+								pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+								pipeline_create_info.stageCount = 2;
+								pipeline_create_info.pStages = infos;
+								pipeline_create_info.pVertexInputState = &vertex_state_create_info;
+								pipeline_create_info.pInputAssemblyState = &input_assembly_create_info;
+								pipeline_create_info.pViewportState = &view_port_create_info;
+								pipeline_create_info.pRasterizationState = &rasterizer_state_create_info;
+								pipeline_create_info.pMultisampleState = &multisample_state_create_info;
+								pipeline_create_info.pColorBlendState = &blend_state_create_info;
+								pipeline_create_info.layout = pipeline_layout;
+								pipeline_create_info.renderPass = rvk->render_pass;
+								pipeline_create_info.basePipelineIndex = -1;
+								VkPipeline pipeline;
+								res = vkCreateGraphicsPipelines( rvk->dev , VK_NULL_HANDLE , 1 , &pipeline_create_info , nullptr , &rvk->pipeline );
+								if( res != VK_SUCCESS )
+								{
+									OS::IO::debugLogln( "error while creating pipelines" );
+									return;
+								}
+							}
+							{
+								{
+									struct Vertex
+									{
+										float pos[ 3 ];
+										float color[ 3 ];
+									};
+									Vertex vertices[] =
+									{
+										{ { -1.0f , -1.0f , 0.0f } , { 1.0f , 0.0f , 0.0f } } ,
+										{ { 0.0f , 1.0f , 0.0f } ,{ 0.0f , 1.0f , 0.0f } } ,
+										{ { 1.0f , -1.0f , 0.0f } ,{ 0.0f , 0.0f , 1.0f } }
+									}
+								}
 								VkCommandBufferBeginInfo cmd_begin_info;
 								Allocator::zero( &cmd_begin_info );
 								cmd_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -362,36 +586,77 @@ namespace OS
 									image_barrier_present_to_clear.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 									image_barrier_present_to_clear.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 									image_barrier_present_to_clear.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+									image_barrier_present_to_clear.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+									image_barrier_present_to_clear.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 									image_barrier_present_to_clear.srcQueueFamilyIndex = queue_index;
 									image_barrier_present_to_clear.dstQueueFamilyIndex = queue_index;
 									image_barrier_present_to_clear.image = rvk->swap_chain_images[ i ];
 									image_barrier_present_to_clear.subresourceRange = image_subresource_range;
-									VkImageMemoryBarrier image_barrier_clear_to_present;
-									Allocator::zero( &image_barrier_clear_to_present );
-									image_barrier_clear_to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-									image_barrier_clear_to_present.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-									image_barrier_clear_to_present.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-									image_barrier_clear_to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-									image_barrier_clear_to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-									image_barrier_clear_to_present.srcQueueFamilyIndex = queue_index;
-									image_barrier_clear_to_present.dstQueueFamilyIndex = queue_index;
-									image_barrier_clear_to_present.image = rvk->swap_chain_images[ i ];
-									image_barrier_clear_to_present.subresourceRange = image_subresource_range;
+									VkImageMemoryBarrier image_barrier_clear_to_draw;
+									Allocator::zero( &image_barrier_clear_to_draw );
+									image_barrier_clear_to_draw.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+									image_barrier_clear_to_draw.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+									image_barrier_clear_to_draw.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+									image_barrier_clear_to_draw.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+									image_barrier_clear_to_draw.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+									image_barrier_clear_to_draw.srcQueueFamilyIndex = queue_index;
+									image_barrier_clear_to_draw.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+									image_barrier_clear_to_draw.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+									image_barrier_clear_to_draw.dstQueueFamilyIndex = queue_index;
+									image_barrier_clear_to_draw.image = rvk->swap_chain_images[ i ];
+									image_barrier_clear_to_draw.subresourceRange = image_subresource_range;
+									VkImageMemoryBarrier image_barrier_draw_to_present;
+									Allocator::zero( &image_barrier_draw_to_present );
+									image_barrier_draw_to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+									image_barrier_draw_to_present.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+									image_barrier_draw_to_present.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+									image_barrier_draw_to_present.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+									image_barrier_draw_to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+									image_barrier_draw_to_present.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+									image_barrier_draw_to_present.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+									image_barrier_draw_to_present.srcQueueFamilyIndex = queue_index;
+									image_barrier_draw_to_present.dstQueueFamilyIndex = queue_index;
+									image_barrier_draw_to_present.image = rvk->swap_chain_images[ i ];
+									image_barrier_draw_to_present.subresourceRange = image_subresource_range;
 
 									vkBeginCommandBuffer( rvk->cmd_buffers_per_image[ i ] , &cmd_begin_info );
-									vkCmdPipelineBarrier( rvk->cmd_buffers_per_image[ i ] , VK_PIPELINE_STAGE_TRANSFER_BIT , VK_PIPELINE_STAGE_TRANSFER_BIT ,
+									/*vkCmdPipelineBarrier( rvk->cmd_buffers_per_image[ i ] , VK_PIPELINE_STAGE_ALL_COMMANDS_BIT , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT ,
 										0 , 0 , nullptr , 0 , nullptr , 1 , &image_barrier_present_to_clear );
 									vkCmdClearColorImage( rvk->cmd_buffers_per_image[ i ] , rvk->swap_chain_images[ i ] , VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL ,
-										&clear_color , 1 , &image_subresource_range );
-									vkCmdPipelineBarrier( rvk->cmd_buffers_per_image[ i ] , VK_PIPELINE_STAGE_TRANSFER_BIT , VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ,
-										0 , 0 , nullptr , 0 , nullptr , 1 , &image_barrier_clear_to_present );
-									vkEndCommandBuffer( rvk->cmd_buffers_per_image[ i ] );
+										&clear_color , 1 , &image_subresource_range );*/
+									vkCmdPipelineBarrier( rvk->cmd_buffers_per_image[ i ] , VK_PIPELINE_STAGE_TRANSFER_BIT , VK_PIPELINE_STAGE_TRANSFER_BIT ,
+										0 , 0 , nullptr , 0 , nullptr , 1 , &image_barrier_clear_to_draw );
+									VkRenderPassBeginInfo render_pass_begin_info;
+									Allocator::zero( &render_pass_begin_info );
+									render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+									render_pass_begin_info.renderPass = rvk->render_pass;
+									render_pass_begin_info.framebuffer = rvk->frame_buffer_per_image[ i ];
+									render_pass_begin_info.renderArea =
+									{
+										{ 0 , 0 } ,
+										{ 512 , 512 }
+									};
+									render_pass_begin_info.clearValueCount = 1;
+									VkClearValue clear_value;
+									clear_value.color = { 0.1f , 0.12f , 0.14f , 1.0f };
+									render_pass_begin_info.pClearValues = &clear_value;
+									vkCmdBeginRenderPass( rvk->cmd_buffers_per_image[ i ] , &render_pass_begin_info , VK_SUBPASS_CONTENTS_INLINE );
+									vkCmdBindPipeline( rvk->cmd_buffers_per_image[ i ] , VK_PIPELINE_BIND_POINT_GRAPHICS , rvk->pipeline );
+									vkCmdDraw( rvk->cmd_buffers_per_image[ i ] , 3 , 1 , 0 , 0 );
+									vkCmdEndRenderPass( rvk->cmd_buffers_per_image[ i ] );
+
+									vkCmdPipelineBarrier( rvk->cmd_buffers_per_image[ i ] , VK_PIPELINE_STAGE_ALL_COMMANDS_BIT , VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ,
+										0 , 0 , nullptr , 0 , nullptr , 1 , &image_barrier_draw_to_present );
+									auto res = vkEndCommandBuffer( rvk->cmd_buffers_per_image[ i ] );
+									if( res != VK_SUCCESS )
+									{
+										OS::IO::debugLogln( "error while submiting commands" );
+										return;
+									}
 								}
 
 							}
 						}
-						
-						
 					}
 				}
 			}
@@ -424,7 +689,12 @@ namespace OS
 				present_info.pSwapchains = &rvk->swap_chain;
 				present_info.swapchainCount = 1;
 				present_info.pImageIndices = &image_index;
-				vkQueuePresentKHR( rvk->dev_queue , &present_info );
+				res = vkQueuePresentKHR( rvk->dev_queue , &present_info );
+				if( res != VK_SUCCESS )
+				{
+					OS::IO::debugLogln( "error while presenting queue to device" );
+					return;
+				}
 			}
 			//rvk->mainloop();
 		} , Allocator::singleton

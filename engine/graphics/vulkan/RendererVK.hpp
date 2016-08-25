@@ -32,6 +32,7 @@ namespace VK
 		LocalArray< VkImage , 10 > swap_chain_images;
 		LocalArray< VkImageView , 10 > swap_chain_images_views;
 		LocalArray< VkCommandBuffer , 10 > cmd_buffers_per_image;
+		LocalArray< VkFramebuffer , 10 > frame_buffer_per_image;
 		struct
 		{
 			VkSemaphore render_complete;
@@ -39,6 +40,9 @@ namespace VK
 		} semaphores;
 		VkSubmitInfo submit_info_skelet;
 		VkCommandPool command_pool;
+		VkRenderPass render_pass;
+		VkShaderModule vert_shader , frag_shader;
+		VkPipeline pipeline;
 		void mainloop();
 	};
 }
