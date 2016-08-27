@@ -6,12 +6,11 @@ namespace VK
 {
 	class Device
 	{
-		friend class Instance;
 		VK_OBJECT( Device );
 	private:
 		Unique< VkDevice > handle;
-		uint32_t graphics_family_index;
 		uint32_t graphics_queue_count;
+		Instance::PhysicalDevice pdev;
 	public:
 		static Device createGraphicsDevice( Instance const &instance , uint32_t graphics_queue_count = 1 )
 		{
@@ -26,13 +25,17 @@ namespace VK
 			vkdevinfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 			vkdevinfo.queueCreateInfoCount = 1;
 			vkdevinfo.pQueueCreateInfos = &vkdevqueueinfo;
-			Device out ;
+			Device out;
+			out.pdev = instance.getPhysicalDevice();
 			out.handle.create( instance.getPhysicalDevice().getHandle() , vkdevinfo );
-			out.graphics_family_index = instance.getPhysicalDevice().getGraphicsQueueFamily();
 			out.graphics_queue_count = graphics_queue_count;
 			return out;
 		}
-		Unique< VkSemaphore > createSemaphore()
+		Instance::PhysicalDevice const &getPhysicalDevice() const
+		{
+			return pdev;
+		}
+		Unique< VkSemaphore > createSemaphore() const
 		{
 			VkSemaphoreCreateInfo semaphore_create_info;
 			Allocator::zero( &semaphore_create_info );
@@ -43,7 +46,7 @@ namespace VK
 			out.create( *handle , semaphore_create_info );
 			return out;
 		}
-		Unique< VkShaderModule > createShaderModule( FileImage const *image )
+		Unique< VkShaderModule > createShaderModule( FileImage const *image ) const
 		{
 			VkShaderModuleCreateInfo shader_module_create_info;
 			Allocator::zero( &shader_module_create_info );
@@ -57,7 +60,7 @@ namespace VK
 		VkQueue getGraphicsQueue( uint index = 0 ) const
 		{
 			VkQueue queue;
-			vkGetDeviceQueue( *handle , graphics_family_index , index , &queue );
+			vkGetDeviceQueue( *handle , pdev.getGraphicsQueueFamily() , index , &queue );
 			return queue;
 		}
 		uint getGraphicsQueueCount() const
@@ -66,7 +69,7 @@ namespace VK
 		}
 		uint getGraphicsQueueFamily() const
 		{
-			return graphics_family_index;
+			return pdev.getGraphicsQueueFamily();
 		}
 
 		VkDevice getHandle() const

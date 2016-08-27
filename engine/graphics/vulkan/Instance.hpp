@@ -29,7 +29,7 @@ namespace VK
 				return handle;
 			}
 			//TODO find closest match
-			uint32_t getMemoryIndex( uint32_t type_bits , uint32_t properties )
+			uint32_t getMemoryIndex( uint32_t type_bits , uint32_t properties ) const
 			{
 				for( uint32_t i = 0; i < 32; i++ )
 				{

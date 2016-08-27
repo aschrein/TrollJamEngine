@@ -3,6 +3,7 @@
 #include <engine/graphics/vulkan/Instance.hpp>
 #include <engine/graphics/vulkan/CommandBuffer.hpp>
 #include <engine/graphics/vulkan/Queue.hpp>
+#include <engine/graphics/vulkan/Buffers.hpp>
 
 #include <engine/util/defines.hpp>
 #include <engine/data_struct/Buffer.hpp>
@@ -157,6 +158,26 @@ namespace OS
 				VkPipelineVertexInputStateCreateInfo vertex_state_create_info;
 				Allocator::zero( &vertex_state_create_info );
 				vertex_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+				VkVertexInputBindingDescription in_bind_info;
+				{
+					Allocator::zero( &in_bind_info );
+					in_bind_info.binding = 0;
+					in_bind_info.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+					in_bind_info.stride = 12;
+				}
+				vertex_state_create_info.pVertexBindingDescriptions = &in_bind_info;
+				vertex_state_create_info.vertexBindingDescriptionCount = 1;
+
+				VkVertexInputAttributeDescription attrib_desc;
+				{
+					Allocator::zero( &attrib_desc );
+					attrib_desc.binding = 0;
+					attrib_desc.location = 0;
+					attrib_desc.offset = 0;
+					attrib_desc.format = VK_FORMAT_R32G32B32_SFLOAT;
+				}
+				vertex_state_create_info.pVertexAttributeDescriptions = &attrib_desc;
+				vertex_state_create_info.vertexAttributeDescriptionCount = 1;
 				VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info;
 				Allocator::zero( &input_assembly_create_info );
 				input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -240,6 +261,25 @@ namespace OS
 			CommandPool cmd_pool = CommandPool::create( device , device.getGraphicsQueueFamily() );
 			VK::CommandBuffer cmd_buf = cmd_pool.createCommandBuffer();
 			VK::Queue graphics_queue = VK::Queue::createGraphicsQueue( device );
+			float vertices[] =
+			{
+				-1.0f , 1.0f , 0.0f ,
+				1.0f , 1.0f , 0.0f ,
+				0.0f , -1.0f , 0.0f
+			};
+			uint indices[] =
+			{
+				0 , 1 , 2
+			};
+			Buffer vertex_buffer = Buffer::createStatic(
+				device , VK::BufferTarget::VERTEX_BUFFER , MemoryType::DEVICE , cmd_buf , graphics_queue ,
+				vertices , 36
+			);
+			Buffer index_buffer = Buffer::createStatic(
+				device , VK::BufferTarget::INDEX_BUFFER , MemoryType::DEVICE , cmd_buf , graphics_queue ,
+				indices , 12
+			);
+
 			while( true )
 			{
 				swap_chain.acquireNextImage( *present_semaphore );
@@ -281,7 +321,10 @@ namespace OS
 				render_pass_begin_info.pClearValues = &clear_value;
 				vkCmdBeginRenderPass( cmd_buf.getHandle() , &render_pass_begin_info , VK_SUBPASS_CONTENTS_INLINE );
 				vkCmdBindPipeline( cmd_buf.getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pipeline );
-				vkCmdDraw( cmd_buf.getHandle() , 3 , 1 , 0 , 0 );
+				VkDeviceSize offsets[ 1 ] = { 0 };
+				vkCmdBindVertexBuffers( cmd_buf.getHandle() , 0 , 1 , &vertex_buffer.getHandle() , offsets );
+				vkCmdBindIndexBuffer( cmd_buf.getHandle() , index_buffer.getHandle() , 0 , VK_INDEX_TYPE_UINT32 );
+				vkCmdDrawIndexed( cmd_buf.getHandle() , 3 , 1 , 0 , 0 , 0 );
 				vkCmdEndRenderPass( cmd_buf.getHandle() );
 				cmd_buf.end();
 				graphics_queue.submitCommandBuffer( cmd_buf , *present_semaphore , *render_semaphore );

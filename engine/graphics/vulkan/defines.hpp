@@ -93,4 +93,17 @@ namespace VK
 		};
 		return vk_[ uint( type ) ];
 	}
+	enum class BufferTarget : uint
+	{
+		VERTEX_BUFFER , INDEX_BUFFER
+	};
+	inline uint getVK( BufferTarget type )
+	{
+		uint vk_[] =
+		{
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT ,
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+		};
+		return vk_[ uint( type ) ];
+	}
 }

@@ -210,8 +210,7 @@ namespace VK
 		}
 		void create( VkDevice dev , C const &create_info , VkAllocationCallbacks *alloc_callbacks = nullptr )
 		{
-			//VKASSERTLOG( ( DevChildCreateFunc( DevChildCicle< T >::constructor() ) )( dev , &create_info , alloc_callbacks , &value ) );
-			Constructor( dev , &create_info , alloc_callbacks , &value );
+			VKASSERTLOG( Constructor( dev , &create_info , alloc_callbacks , &value ) );
 			this->dev = dev;
 			this->alloc_callbacks = alloc_callbacks;
 		}
@@ -220,8 +219,6 @@ namespace VK
 			if( value != VK_NULL_HANDLE )
 			{
 				Destructor( dev , value , alloc_callbacks );
-				//( DevChildDestroyFunc* )( DevChildCicle< T >::destructor )( dev , value , alloc_callbacks );
-
 			}
 			alloc_callbacks = nullptr;
 			value = VK_NULL_HANDLE;
@@ -237,7 +234,7 @@ namespace VK
 	template<> struct UniqueBase< VkShaderModule > : public DevChild< VkShaderModule , VkShaderModuleCreateInfo , vkCreateShaderModule , vkDestroyShaderModule > {};
 	template<> struct UniqueBase< VkRenderPass > : public DevChild< VkRenderPass , VkRenderPassCreateInfo , vkCreateRenderPass , vkDestroyRenderPass > {};
 	template<> struct UniqueBase< VkFramebuffer > : public DevChild< VkFramebuffer , VkFramebufferCreateInfo , vkCreateFramebuffer , vkDestroyFramebuffer > {};
-
+	template<> struct UniqueBase< VkDeviceMemory > : public DevChild< VkDeviceMemory , VkMemoryAllocateInfo , vkAllocateMemory , vkFreeMemory > {};
 	template<>
 	struct UniqueBase< VkPipeline >{};
 	template< typename T >
