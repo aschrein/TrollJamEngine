@@ -35,6 +35,14 @@ namespace Collections
 		{
 			data[ size++ ] = value;
 		}
+		void push( T &&value )
+		{
+			data[ size++ ] = std::move( value );
+		}
+		void resize( uint new_size )
+		{
+			size = new_size;
+		}
 		struct ArrayIterator
 		{
 			LocalArray *array;

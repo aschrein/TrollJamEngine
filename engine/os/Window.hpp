@@ -17,13 +17,13 @@ namespace OS
 	class Window
 	{
 	private:
+		WindowParam param;
+	public:
 #ifdef _WIN32
 		HWND hwnd;
 		HINSTANCE hinstance;
 		HDC hdc;
 #endif
-		WindowParam param;
-	public:
 		Window( WindowParam param )
 		{
 			this->param = param;

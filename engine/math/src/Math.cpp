@@ -40,6 +40,11 @@ uint32_t MathUtil< uint32_t >::min( uint32_t const &a , uint32_t const &b )
 	return a < b ? a : b;
 }
 template<>
+uint32_t MathUtil< uint32_t >::max( uint32_t const &a , uint32_t const &b )
+{
+	return a > b ? a : b;
+}
+template<>
 float MathUtil< float >::sqrt( float const &val )
 {
 	return sqrtf( val );

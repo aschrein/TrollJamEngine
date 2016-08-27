@@ -3,8 +3,7 @@
 #pragma once
 #include <engine/graphics/common/RendererImpl.hpp>
 #include <engine/graphics/Renderer.hpp>
-#define VK_USE_PLATFORM_WIN32_KHR
-#include <vulkan/vulkan.h>
+#include <engine/graphics/vulkan/defines.hpp>
 #include <engine/data_struct/Buffer.hpp>
 namespace VK
 {
@@ -16,33 +15,7 @@ namespace VK
 #ifdef _WIN32
 		HDC hdc;
 #endif
-		VkInstance instance;
-		VkPhysicalDevice pdev;
-		VkDevice dev;
-		VkQueue dev_queue;
-		VkPhysicalDeviceProperties pdev_prop;
-		VkPhysicalDeviceFeatures pdev_features;
-		VkPhysicalDeviceMemoryProperties pdev_mem_prop;
-		VkFormat depth_format;
-		VkFormat color_format;
-		VkColorSpaceKHR color_space;
-		VkSurfaceKHR surface;
-		VkSwapchainKHR swap_chain;
 		uint pushCreationQueue( CreationDesc desc );
-		LocalArray< VkImage , 10 > swap_chain_images;
-		LocalArray< VkImageView , 10 > swap_chain_images_views;
-		LocalArray< VkCommandBuffer , 10 > cmd_buffers_per_image;
-		LocalArray< VkFramebuffer , 10 > frame_buffer_per_image;
-		struct
-		{
-			VkSemaphore render_complete;
-			VkSemaphore present_complete;
-		} semaphores;
-		VkSubmitInfo submit_info_skelet;
-		VkCommandPool command_pool;
-		VkRenderPass render_pass;
-		VkShaderModule vert_shader , frag_shader;
-		VkPipeline pipeline;
 		void mainloop();
 	};
 }
