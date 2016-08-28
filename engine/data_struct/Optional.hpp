@@ -9,12 +9,23 @@ namespace Options
 		S second;
 		bool var;
 	public:
-		Optional( F const &f )
+		Optional() = default;
+		void setFirst( F &&f )
+		{
+			first = std::move( f );
+			var = true;
+		}
+		void setSecond( S &&s )
+		{
+			second = std::move( s );
+			var = false;
+		}
+		void setFirst( F const &f )
 		{
 			first = f;
 			var = true;
 		}
-		Optional( S const &s )
+		void setSecond( S const &s )
 		{
 			second = s;
 			var = false;
@@ -28,6 +39,14 @@ namespace Options
 			return first;
 		}
 		S &getSecond()
+		{
+			return second;
+		}
+		F const &getFirst() const
+		{
+			return first;
+		}
+		S const &getSecond() const
 		{
 			return second;
 		}

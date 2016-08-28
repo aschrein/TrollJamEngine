@@ -2,6 +2,7 @@
 #include <engine/mem/Allocators.hpp>
 #include <engine/data_struct/String.hpp>
 #include <engine/os/Async.hpp>
+#include <engine/mem/RangeMaster.hpp>
 bool AllocatorsTest()
 {
 	using namespace Allocators;
@@ -26,6 +27,17 @@ bool AllocatorsTest()
 	{
 		OS::IO::debugLogln( arr[ i ] );
 	}*/
+	{
+
+		RangeManager rm( 300 );
+		rm.allocate( 100 );
+		rm.allocate( 100 );
+		rm.allocate( 100 );
+		rm.free( 0 );
+		rm.free( 100 );
+		rm.free( 200 );
+		rm.print();
+	}
 	OS::IO::debugLogln( "AllocatorsTest success" );
 	return true;
 }

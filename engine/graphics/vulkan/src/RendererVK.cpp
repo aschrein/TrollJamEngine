@@ -263,23 +263,28 @@ namespace OS
 			VK::Queue graphics_queue = VK::Queue::createGraphicsQueue( device );
 			float vertices[] =
 			{
-				-1.0f , 1.0f , 0.0f ,
+				-1.0f , -1.0f , 0.0f ,
+				1.0f , -1.0f , 0.0f ,
 				1.0f , 1.0f , 0.0f ,
-				0.0f , -1.0f , 0.0f
+				-1.0f , 1.0f , 0.0f ,
 			};
 			uint indices[] =
 			{
-				0 , 1 , 2
+				0 , 1 , 2 , 3
 			};
-			Buffer vertex_buffer = Buffer::createStatic(
-				device , VK::BufferTarget::VERTEX_BUFFER , MemoryType::DEVICE , cmd_buf , graphics_queue ,
-				vertices , 36
-			);
-			Buffer index_buffer = Buffer::createStatic(
-				device , VK::BufferTarget::INDEX_BUFFER , MemoryType::DEVICE , cmd_buf , graphics_queue ,
-				indices , 12
-			);
-
+			Memory dev_mem = Memory::create( device , 0x1000 , device.getPhysicalDevice().getMemoryIndex( 29 , getVK( MemoryType::DEVICE ) ) );
+			Buffer vertex_buffer = Buffer::create( device , VK::BufferTarget::VERTEX_BUFFER , &dev_mem , 48 );
+			Buffer index_buffer = Buffer::create( device , VK::BufferTarget::INDEX_BUFFER , &dev_mem , 16 );
+			{
+				Buffer tmp_buffer_i = Buffer::create( device , VK::BufferTarget::TRANSFER_SRC , MemoryType::HOST , 16 , indices );
+				Buffer tmp_buffer_v = Buffer::create( device , VK::BufferTarget::TRANSFER_SRC , MemoryType::HOST , 48 , vertices );
+				cmd_buf.begin();
+				cmd_buf.copy( vertex_buffer , tmp_buffer_v , tmp_buffer_v.getSize() );
+				cmd_buf.copy( index_buffer , tmp_buffer_i , tmp_buffer_i.getSize() );
+				cmd_buf.end();
+				graphics_queue.submitCommandBuffer( cmd_buf );
+				graphics_queue.wait();
+			}
 			while( true )
 			{
 				swap_chain.acquireNextImage( *present_semaphore );
@@ -324,7 +329,7 @@ namespace OS
 				VkDeviceSize offsets[ 1 ] = { 0 };
 				vkCmdBindVertexBuffers( cmd_buf.getHandle() , 0 , 1 , &vertex_buffer.getHandle() , offsets );
 				vkCmdBindIndexBuffer( cmd_buf.getHandle() , index_buffer.getHandle() , 0 , VK_INDEX_TYPE_UINT32 );
-				vkCmdDrawIndexed( cmd_buf.getHandle() , 3 , 1 , 0 , 0 , 0 );
+				vkCmdDrawIndexed( cmd_buf.getHandle() , 3 , 1 , 1 , 0 , 0 );
 				vkCmdEndRenderPass( cmd_buf.getHandle() );
 				cmd_buf.end();
 				graphics_queue.submitCommandBuffer( cmd_buf , *present_semaphore , *render_semaphore );

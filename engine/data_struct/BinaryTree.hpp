@@ -3,10 +3,12 @@
 #include <engine/data_struct/String.hpp>
 #include <engine/math/Math.hpp>
 #include <engine/mem/Allocators.hpp>
+#include <engine/data_struct/Optional.hpp>
 #undef max
 namespace Collections
 {
 	using namespace Allocators;
+	using namespace Options;
 	template< typename T >
 	struct TBinaryTreeItem
 	{
@@ -341,6 +343,40 @@ namespace Collections
 			}
 			return nullptr;
 		}
+		struct NeighborWalk
+		{
+			TBinaryTreeItem *pre_turn_left = nullptr;
+			TBinaryTreeItem *pre_turn_right = nullptr;
+			TBinaryTreeItem *container = nullptr;
+		};
+		NeighborWalk getNeighbors( T const &val , NeighborWalk walk = NeighborWalk() )
+		{
+			if( value == val )
+			{
+				walk.container = this;
+				return walk;
+			} else if( val < value )
+			{
+				walk.pre_turn_left = this;
+				if( left )
+				{
+					return left->getNeighbors( val , walk );
+				} else
+				{
+					return walk;
+				}
+			} else
+			{
+				walk.pre_turn_right = this;
+				if( right )
+				{
+					return right->getNeighbors( val , walk );
+				} else
+				{
+					return walk;
+				}
+			}
+		}
 	};
 	template< typename T >
 	class BinaryTree
@@ -355,6 +391,11 @@ namespace Collections
 			allocator( allocator )
 		{
 
+		}
+		void setAllocator( Allocator *allocator )
+		{
+			release();
+			this->allocator = allocator;
 		}
 		BinaryTree() = default;
 		BinaryTree( BinaryTree const &list )
@@ -489,6 +530,34 @@ namespace Collections
 		int getSize() const
 		{
 			return items_count;
+		}
+		struct Neighborhood
+		{
+			Result< T > value;
+			Result< T > left;
+			Result< T > right;
+		};
+		Neighborhood getNeighborhood( T value )
+		{
+			if( !root )
+			{
+				return Neighborhood();
+			}
+			auto nw = root->getNeighbors( value );
+			Neighborhood out;
+			if( nw.container )
+			{
+				out.value = Result< T >( nw.container->value );
+			}
+			if( nw.pre_turn_left )
+			{
+				out.right = Result< T >( nw.pre_turn_left->value );
+			}
+			if( nw.pre_turn_right )
+			{
+				out.left = Result< T >( nw.pre_turn_right->value );
+			}
+			return out;
 		}
 		BinaryTreeItem *getRoot()
 		{

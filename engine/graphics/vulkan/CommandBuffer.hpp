@@ -2,6 +2,7 @@
 #include <engine/graphics/vulkan/defines.hpp>
 #include <engine/graphics/vulkan/Images.hpp>
 #include <engine/graphics/vulkan/Device.hpp>
+#include <engine/graphics/vulkan/Buffers.hpp>
 #include <engine/math/vec.hpp>
 namespace VK
 {
@@ -51,6 +52,13 @@ namespace VK
 			barrier.subresourceRange = image.getView().getSubresourceRange();
 			vkCmdPipelineBarrier( *handle , VK_PIPELINE_STAGE_TRANSFER_BIT , VK_PIPELINE_STAGE_TRANSFER_BIT ,
 				0 , 0 , nullptr , 0 , nullptr , 1 , &barrier );
+		}
+		void copy( Buffer const &dst , Buffer const &src , uint size )
+		{
+			VkBufferCopy copy;
+			Allocator::zero( &copy );
+			copy.size = size;
+			vkCmdCopyBuffer( *handle , src.getHandle() , dst.getHandle() , 1 , &copy );
 		}
 		void end() const
 		{
