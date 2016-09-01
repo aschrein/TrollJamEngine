@@ -1,6 +1,6 @@
 #pragma once
-#include <engine/graphics/vulkan/defines.hpp>
-#include <engine/graphics/vulkan/Device.hpp>
+//#include <engine/graphics/vulkan/defines.hpp>
+//#include <engine/graphics/vulkan/Device.hpp>
 #include <engine/graphics/vulkan/Images.hpp>
 namespace VK
 {
@@ -20,6 +20,7 @@ namespace VK
 		VkDevice dev_raw;
 		Unique< VkSwapchainKHR > handle;
 		LocalArray< Image , 10 > images;
+		LocalArray< ImageView , 10 > views;
 		uint32_t current_image = 0;
 		uint width , height;
 	public:
@@ -35,7 +36,7 @@ namespace VK
 		{
 			return surface.preffered_format.format;
 		}
-		i2 getSize() const
+		int2 getSize() const
 		{
 			return{ width , height };
 		}
@@ -53,6 +54,10 @@ namespace VK
 		Image const &getCurrentImage() const
 		{
 			return images[ current_image ];
+		}
+		ImageView const &getCurrentImageView() const
+		{
+			return views[ current_image ];
 		}
 		static SwapChain create( Instance const &instance , Device const &dev , uint images_count , OS::Window const &window )
 		{
@@ -123,41 +128,27 @@ namespace VK
 			swap_chain_create_info.clipped = VK_TRUE;
 			swap_chain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 			out.handle.create( dev.getHandle() , swap_chain_create_info );
-			vkGetSwapchainImagesKHR( dev.getHandle() , *out.handle , &out.images.size , nullptr );
+			uint image_count;
+			vkGetSwapchainImagesKHR( dev.getHandle() , *out.handle , &image_count , nullptr );
 			LocalArray< VkImage , 10 > images;
-			vkGetSwapchainImagesKHR( dev.getHandle() , *out.handle , &out.images.size , &images[ 0 ] );
+			vkGetSwapchainImagesKHR( dev.getHandle() , *out.handle , &image_count , &images[ 0 ] );
 			out.dev_raw = dev.getHandle();
 			out.width = swap_chain_extent.width;
 			out.height = swap_chain_extent.height;
-			ito( out.images.size )
+
+			ito( image_count )
 			{
-				VkImageViewCreateInfo image_view_info;
-				Allocator::zero( &image_view_info );
-				image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-				image_view_info.format = swap_chain_create_info.imageFormat;
-				image_view_info.components = {
-					VK_COMPONENT_SWIZZLE_R,
-					VK_COMPONENT_SWIZZLE_G,
-					VK_COMPONENT_SWIZZLE_B,
-					VK_COMPONENT_SWIZZLE_A
-				};
-				image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-				{
-					VkImageSubresourceRange subresource_range;
-					subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-					subresource_range.baseMipLevel = 0;
-					subresource_range.levelCount = 1;
-					subresource_range.layerCount = 1;
-					subresource_range.baseArrayLayer = 0;
-					image_view_info.subresourceRange = subresource_range;
-				}
 				Image image;
 				image.handle.init( dev.getHandle() , images[ i ] );
-				image_view_info.image = images[ i ];
-				image.image_view.handle.create( dev.getHandle() , image_view_info );
-				image.image_view.info = image_view_info;
 				image.format = swap_chain_create_info.imageFormat;
-				out.images[ i ] = std::move( image );
+				image.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+				image.dev_raw = dev.getHandle();
+				out.views.push( std::move( image.createView(
+				{ VK_COMPONENT_SWIZZLE_R , VK_COMPONENT_SWIZZLE_G , VK_COMPONENT_SWIZZLE_B , VK_COMPONENT_SWIZZLE_A } ,
+				VK_IMAGE_ASPECT_COLOR_BIT
+				
+				) ) );
+				out.images.push( std::move( image ) );
 			}
 			return out;
 		}

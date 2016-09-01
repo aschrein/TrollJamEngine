@@ -5,7 +5,7 @@
 #include <engine/assets/Mesh.hpp>
 #include <engine/assets/Font.hpp>
 #include <engine/graphics/Camera.hpp>
-#include <engine/graphics/Renderer.hpp>
+#include <engine/graphics/Graphics.hpp>
 
 #include <Init.hpp>
 using namespace Math;
@@ -14,8 +14,8 @@ using namespace Graphics;
 Material default_material;
 uint texture_handle = 0;
 FileManager *FileManager::singleton;
-DrawMeshDesc monkey_head_mesh;
-DrawMeshDesc plane_mesh;
+DrawMeshInfo monkey_head_mesh;
+DrawMeshInfo plane_mesh;
 int main( int argc , char ** argv )
 {
 	using namespace OS;
@@ -25,16 +25,16 @@ int main( int argc , char ** argv )
 	float camera_angle_phi = 0.0f;
 	float camera_angle_thetha = 0.0f;
 	float camera_distance = 1.0f;
-	f3 camera_sight_point = { 0.0f , 0.0f , 0.0f };
-	i2 ms;
-	Renderer *renderer;
+	float3 camera_sight_point = { 0.0f , 0.0f , 0.0f };
+	int2 ms;
+	RenderingBackend *renderer;
 	Signal init_signal;
 	
 	RingBuffer< Pair< OS::InputState::State , OS::InputState::EventType > , 100 > input_events;
 	OS::Window window = OS::Window( { 100 , 100 , 512 , 512 ,
 		[ & ]()
 	{
-		renderer = window.createRenderer();
+		renderer = window.createRenderingBackend();
 		init_signal.signal();
 	} ,
 		[]( int x , int y , int w , int h )
@@ -56,7 +56,7 @@ int main( int argc , char ** argv )
 		OS::InputState::State old_state;
 		Allocator::zero( &old_state , 1 );
 		init_signal.wait();
-		auto allocator = renderer->getAuxiliaryAllocator();
+		/*auto allocator = renderer->getAuxiliaryAllocator();
 		FileManager::singleton->loadFile( { "Suzanne.txt" , "calibri_16.fnt" , "calibri_16.tga" , "wood_texture.tga" } , local_file_consumer.get() , allocator );
 		int files = 4;
 		SimpleMesh3D mesh;
@@ -91,17 +91,17 @@ int main( int argc , char ** argv )
 				files--;
 			}
 		}
-		/*{
+		{
 			{
-				AttributeBufferDesc *attribute_buffer_desc = allocator->alloc< AttributeBufferDesc >();
+				VertexBufferInfo *attribute_buffer_desc = allocator->alloc< VertexBufferInfo >();
 				attribute_buffer_desc->data = mesh.positions.getPtr();
-				attribute_buffer_desc->size = mesh.positions.getSize() * sizeof( f3 );
+				attribute_buffer_desc->size = mesh.positions.getSize() * sizeof( float3 );
 				attribute_buffer_desc->usage = BufferUsage::STATIC_DRAW;
 				Attribute *attributes = allocator->alloc< Attribute >( 1 );
 				attributes->elem_count = 3;
 				attributes->normalized = false;
 				attributes->offset = 0;
-				attributes->stride = sizeof( f3 );
+				attributes->stride = sizeof( float3 );
 				attributes->src_type = PlainFieldType::FLOAT32;
 				attributes->slot = AttributeSlot::POSITION;
 				attribute_buffer_desc->attributes = attributes;
@@ -110,15 +110,15 @@ int main( int argc , char ** argv )
 				monkey_head_mesh.vertex_buffer_handle[ 0 ] = renderer->createVertexBuffer( attribute_buffer_desc );
 			}
 			{
-				AttributeBufferDesc *attribute_buffer_desc = allocator->alloc< AttributeBufferDesc >();
+				VertexBufferInfo *attribute_buffer_desc = allocator->alloc< VertexBufferInfo >();
 				attribute_buffer_desc->data = mesh.normals.getPtr();
-				attribute_buffer_desc->size = mesh.normals.getSize() * sizeof( f3 );
+				attribute_buffer_desc->size = mesh.normals.getSize() * sizeof( float3 );
 				attribute_buffer_desc->usage = BufferUsage::STATIC_DRAW;
 				Attribute *attributes = allocator->alloc< Attribute >( 1 );
 				attributes->elem_count = 3;
 				attributes->normalized = false;
 				attributes->offset = 0;
-				attributes->stride = sizeof( f3 );
+				attributes->stride = sizeof( float3 );
 				attributes->src_type = PlainFieldType::FLOAT32;
 				attributes->slot = AttributeSlot::NORMAL;
 				attribute_buffer_desc->attributes = attributes;
@@ -127,7 +127,7 @@ int main( int argc , char ** argv )
 				monkey_head_mesh.vertex_buffers_count = 2;
 			}
 			{
-				IndexBufferDesc *index_buffer_desc = allocator->alloc< IndexBufferDesc >();
+				IndexBufferInfo *index_buffer_desc = allocator->alloc< IndexBufferInfo >();
 				index_buffer_desc->data = mesh.faces.getPtr();
 				index_buffer_desc->size = mesh.faces.getSize() * sizeof( i3 );
 				index_buffer_desc->index_type = IndexType::UINT32;
@@ -138,10 +138,10 @@ int main( int argc , char ** argv )
 			monkey_head_mesh.start_index = 0;
 			monkey_head_mesh.primitive_type = PrimitiveType::TRIANGLES;
 		}
-		{
+		/*{
 			monkey_head_mesh.primitive_type = PrimitiveType::TRIANGLES;
 
-			TextureDesc *texture_desc = allocator->alloc< TextureDesc >();
+			TextureInfo *texture_desc = allocator->alloc< TextureInfo >();
 			texture_desc->bitmap = head_map;
 			texture_desc->mag_filter = MAGFilter::LINEAR;
 			texture_desc->min_filter = MINFilter::MIPMAP_LINEAR;
@@ -152,7 +152,7 @@ int main( int argc , char ** argv )
 			default_material.has_albedo_texture = true;
 			default_material.albedo = renderer->createTexture( texture_desc );
 
-			texture_desc = allocator->alloc< TextureDesc >();
+			texture_desc = allocator->alloc< TextureInfo >();
 			texture_desc->bitmap = tga_map;
 			texture_desc->mag_filter = MAGFilter::LINEAR;
 			texture_desc->min_filter = MINFilter::MIPMAP_LINEAR;
@@ -174,7 +174,7 @@ int main( int argc , char ** argv )
 			};
 			{
 				{
-					AttributeBufferDesc *attribute_buffer_desc = allocator->alloc< AttributeBufferDesc >();
+					VertexBufferInfo *attribute_buffer_desc = allocator->alloc< VertexBufferInfo >();
 					float *data = ( float * )allocator->alloc( sizeof( svertex_positions ) );
 					Allocator::copy( data , svertex_positions , sizeof( svertex_positions ) / sizeof( float ) );
 					attribute_buffer_desc->data = data;
@@ -200,7 +200,7 @@ int main( int argc , char ** argv )
 					plane_mesh.vertex_buffers_count = 1;
 				}
 				{
-					IndexBufferDesc *index_buffer_desc = allocator->alloc< IndexBufferDesc >();
+					IndexBufferInfo *index_buffer_desc = allocator->alloc< IndexBufferInfo >();
 					uint *indices = ( uint * )allocator->alloc( sizeof( sindices ) );
 					index_buffer_desc->data = indices;
 					index_buffer_desc->size = 6 * sizeof( uint );
@@ -216,7 +216,7 @@ int main( int argc , char ** argv )
 		}*/
 		while( true )
 		{
-			/*f3 camera_dir = f3{
+			/*float3 camera_dir = float3{
 				MathUtil< float >::cos( camera_angle_thetha ) * MathUtil< float >::cos( camera_angle_phi ) ,
 				MathUtil< float >::cos( camera_angle_thetha ) * MathUtil< float >::sin( camera_angle_phi ) ,
 				MathUtil< float >::sin( camera_angle_thetha )
@@ -243,7 +243,7 @@ int main( int argc , char ** argv )
 					Allocator::copy( &old_state , &state , 1 );
 				} while( ( res = input_events.pop() ).isPresent() );
 			}
-			f3 camera_sight_dr;
+			float3 camera_sight_dr;
 			if( old_state.keyboard_state[ 'W' ] )
 			{
 				camera_sight_dr -= camera_dir;
@@ -254,11 +254,11 @@ int main( int argc , char ** argv )
 			}
 			if( old_state.keyboard_state[ 'D' ] )
 			{
-				camera_sight_dr -= camera_dir ^ f3( 0.0f , 0.0f , 1.0f );
+				camera_sight_dr -= camera_dir ^ float3( 0.0f , 0.0f , 1.0f );
 			}
 			if( old_state.keyboard_state[ 'A' ] )
 			{
-				camera_sight_dr += camera_dir ^ f3( 0.0f , 0.0f , 1.0f );
+				camera_sight_dr += camera_dir ^ float3( 0.0f , 0.0f , 1.0f );
 			}
 			camera_sight_point += camera_sight_dr.norm() * 0.1f;
 			auto allocator = renderer->getAuxiliaryAllocator();
@@ -295,7 +295,7 @@ int main( int argc , char ** argv )
 						model_matrix( 0 , 3 ) = i * 2 + camera_sight_point.x;
 						model_matrix( 1 , 3 ) = j * 2 + camera_sight_point.y;
 						model_matrix( 2 , 3 ) = camera_sight_point.z;
-						DrawMeshDesc *desc = ( DrawMeshDesc* )cmd_buffer.allocate( sizeof( DrawMeshDesc ) );
+						DrawMeshInfo *desc = ( DrawMeshInfo* )cmd_buffer.allocate( sizeof( DrawMeshInfo ) );
 						Allocator::copy( desc , &monkey_head_mesh , 1 );
 						desc->material = ( Material* )cmd_buffer.allocate( sizeof( Material ) );
 						Allocator::copy( desc->material , &default_material , 1 );
@@ -314,7 +314,7 @@ int main( int argc , char ** argv )
 					model_matrix( 0 , 3 ) = 0;
 					model_matrix( 1 , 3 ) = 0;
 					model_matrix( 2 , 3 ) = -5;
-					DrawMeshDesc *desc = ( DrawMeshDesc* )cmd_buffer.allocate( sizeof( DrawMeshDesc ) );
+					DrawMeshInfo *desc = ( DrawMeshInfo* )cmd_buffer.allocate( sizeof( DrawMeshInfo ) );
 					Allocator::copy( desc , &plane_mesh , 1 );
 					desc->material = ( Material* )cmd_buffer.allocate( sizeof( Material ) );
 					Allocator::copy( desc->material , &default_material , 1 );
@@ -331,7 +331,7 @@ int main( int argc , char ** argv )
 					model_matrix( 0 , 3 ) = 0;
 					model_matrix( 1 , 3 ) = 0;
 					model_matrix( 2 , 3 ) = 0;
-					DrawMeshDesc *desc = ( DrawMeshDesc* )cmd_buffer.allocate( sizeof( DrawMeshDesc ) );
+					DrawMeshInfo *desc = ( DrawMeshInfo* )cmd_buffer.allocate( sizeof( DrawMeshInfo ) );
 					Allocator::copy( desc , &plane_mesh , 1 );
 					desc->material = ( Material* )cmd_buffer.allocate( sizeof( Material ) );
 					Allocator::copy( desc->material , &default_material , 1 );

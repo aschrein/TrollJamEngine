@@ -28,7 +28,7 @@ public:
 	};
 public:
 	String filename;
-	Result< Shared< FileImage > > file_result;
+	Shared< FileImage > file_result;
 	EventType type;
 public:
 	FileEvent( String filename , EventType type , Shared< FileImage > file_image ) :
@@ -46,8 +46,7 @@ public:
 	FileEvent( FileEvent && ) = default;
 	FileEvent& operator=( FileEvent && ) = default;
 };
-//single consumer, single producer
-typedef LockFree::Consumer< FileEvent > FileConsumer;
+typedef LockFree::Consumer< FileEvent , 100 > FileConsumer;
 class FileManager
 {
 protected:

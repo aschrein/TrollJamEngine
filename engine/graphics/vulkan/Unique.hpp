@@ -113,6 +113,64 @@ namespace VK
 			command_pool = VK_NULL_HANDLE;
 		}
 	};
+	template<>
+	struct UniqueBase< VkDescriptorSet >
+	{
+		VkDevice dev = VK_NULL_HANDLE;
+		VkDescriptorPool pool = VK_NULL_HANDLE;
+		VkDescriptorSet value = VK_NULL_HANDLE;
+		void init( VkDevice dev , VkDescriptorPool pool , VkDescriptorSet value )
+		{
+			this->dev = dev;
+			this->value = value;
+			this->pool = pool;
+		}
+		void create( VkDevice dev , VkDescriptorPool pool , VkDescriptorSetAllocateInfo const &create_info )
+		{
+			VKASSERTLOG( vkAllocateDescriptorSets( dev , &create_info , &value ) );
+			this->dev = dev;
+			this->pool = pool;
+		}
+		void release()
+		{
+			if( value != VK_NULL_HANDLE )
+			{
+				vkFreeDescriptorSets( dev , pool , 1 , &value );
+			}
+			value = VK_NULL_HANDLE;
+			dev = VK_NULL_HANDLE;
+			pool = VK_NULL_HANDLE;
+		}
+	};
+	template<>
+	struct UniqueBase< VkPipeline >
+	{
+		VkDevice dev = VK_NULL_HANDLE;
+		VkPipeline value = VK_NULL_HANDLE;
+		VkAllocationCallbacks *alloc_callbacks = nullptr;
+		void init( VkDevice dev , VkPipeline value )
+		{
+			this->dev = dev;
+			this->value = value;
+			this->alloc_callbacks = alloc_callbacks;
+		}
+		void create( VkDevice dev , VkGraphicsPipelineCreateInfo const &create_info , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			VKASSERTLOG( vkCreateGraphicsPipelines( dev , VK_NULL_HANDLE , 1 , &create_info , alloc_callbacks , &value ) );
+			this->dev = dev;
+			this->alloc_callbacks = alloc_callbacks;
+		}
+		void release()
+		{
+			if( value != VK_NULL_HANDLE )
+			{
+				vkDestroyPipeline( dev , value  , alloc_callbacks );
+			}
+			value = VK_NULL_HANDLE;
+			dev = VK_NULL_HANDLE;
+			alloc_callbacks = nullptr;
+		}
+	};
 	/*template< typename T , typename C >
 	struct DevChildCicleFunc
 	{
@@ -235,8 +293,10 @@ namespace VK
 	template<> struct UniqueBase< VkRenderPass > : public DevChild< VkRenderPass , VkRenderPassCreateInfo , vkCreateRenderPass , vkDestroyRenderPass > {};
 	template<> struct UniqueBase< VkFramebuffer > : public DevChild< VkFramebuffer , VkFramebufferCreateInfo , vkCreateFramebuffer , vkDestroyFramebuffer > {};
 	template<> struct UniqueBase< VkDeviceMemory > : public DevChild< VkDeviceMemory , VkMemoryAllocateInfo , vkAllocateMemory , vkFreeMemory > {};
-	template<>
-	struct UniqueBase< VkPipeline >{};
+	template<> struct UniqueBase< VkPipelineLayout > : public DevChild< VkPipelineLayout , VkPipelineLayoutCreateInfo , vkCreatePipelineLayout , vkDestroyPipelineLayout > {};
+	template<> struct UniqueBase< VkDescriptorPool > : public DevChild< VkDescriptorPool , VkDescriptorPoolCreateInfo , vkCreateDescriptorPool , vkDestroyDescriptorPool > {};
+	template<> struct UniqueBase< VkDescriptorSetLayout > : public DevChild< VkDescriptorSetLayout , VkDescriptorSetLayoutCreateInfo , vkCreateDescriptorSetLayout , vkDestroyDescriptorSetLayout > {};
+
 	template< typename T >
 	class Unique
 	{
@@ -281,7 +341,7 @@ namespace VK
 		}
 		T const *operator&() const
 		{
-			return base.value;
+			return &base.value;
 		}
 
 		T const &operator*() const

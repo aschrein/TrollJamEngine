@@ -1,6 +1,6 @@
 #pragma once
 #include <engine/os/Input.hpp>
-#include <engine/graphics/Renderer.hpp>
+#include <engine/graphics/Graphics.hpp>
 namespace OS
 {
 	using namespace OS::InputState;
@@ -28,10 +28,10 @@ namespace OS
 		{
 			this->param = param;
 		}
-		void setPosition( i2 const & );
-		void setSize( i2 const & );
-		i2 getSize() const;
-		Renderer *createRenderer( Allocators::Allocator *allocator = Allocators::Allocator::singleton );
+		void setPosition( int2 const & );
+		void setSize( int2 const & );
+		int2 getSize() const;
+		RenderingBackend *createRenderingBackend( Allocators::Allocator *allocator = Allocators::Allocator::singleton );
 		~Window();
 		void run();
 	};

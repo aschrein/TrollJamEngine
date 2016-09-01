@@ -26,31 +26,31 @@ namespace VK
 			cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 			vkBeginCommandBuffer( *handle , &cmd_begin_info );
 		}
-		void clearImage( Image const &image , f4 const &clear_color ) const
+		void clearImage( Image const &image , VkImageSubresourceRange range , float4 const &clear_color ) const
 		{
 			VkClearColorValue cv[] =
 			{
 				clear_color.x , clear_color.y , clear_color.z , clear_color.w
 			};
 			vkCmdClearColorImage( *handle , image.getHandle() ,
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL , cv , 1 , &image.getView().getSubresourceRange() );
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL , cv , 1 , &range );
 		}
-		void ImageBarrier( Image const &image , ImageState const &from , ImageState const &to ) const
+		void ImageBarrier( Image const &image , VkImageSubresourceRange range , VkAccessFlags access_flags , VkImageLayout layout ) const
 		{
 			VkImageMemoryBarrier barrier;
 			Allocator::zero( &barrier );
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.srcAccessMask = getVK( from.access_mask );
-			barrier.dstAccessMask = getVK( to.access_mask );
-			barrier.oldLayout = getVK( from.layout );
-			barrier.newLayout = getVK( to.layout );
+			barrier.srcAccessMask = image.getAccessFlags();
+			barrier.dstAccessMask = access_flags;
+			barrier.oldLayout = image.getLayout();
+			barrier.newLayout = layout;
 			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.srcQueueFamilyIndex = family;
 			barrier.dstQueueFamilyIndex = family;
 			barrier.image = image.getHandle();
-			barrier.subresourceRange = image.getView().getSubresourceRange();
-			vkCmdPipelineBarrier( *handle , VK_PIPELINE_STAGE_TRANSFER_BIT , VK_PIPELINE_STAGE_TRANSFER_BIT ,
+			barrier.subresourceRange = range;
+			vkCmdPipelineBarrier( *handle , VK_PIPELINE_STAGE_ALL_COMMANDS_BIT , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT ,
 				0 , 0 , nullptr , 0 , nullptr , 1 , &barrier );
 		}
 		void copy( Buffer const &dst , Buffer const &src , uint size )

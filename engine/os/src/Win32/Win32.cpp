@@ -3,7 +3,6 @@
 #include <engine/graphics/ogl/oglinclude.hpp>
 
 #include <engine/graphics/Graphics.hpp>
-#include <engine/graphics/ogl/RendererGL.hpp>
 
 #include <engine/os/Window.hpp>
 using namespace OS::InputState;
@@ -223,11 +222,11 @@ void Window::run()
 		param.release_func();
 	}
 }
-i2 Window::getSize() const
+int2 Window::getSize() const
 {
 	return{ param.width , param.height };
 }
-void Window::setPosition( i2 const &pos )
+void Window::setPosition( int2 const &pos )
 {
 	param.x = pos.x;
 	param.y = pos.y;
@@ -238,7 +237,7 @@ void Window::setPosition( i2 const &pos )
 	param.width , param.height ,
 	SWP_SHOWWINDOW );
 }
-void Window::setSize( i2 const &size )
+void Window::setSize( int2 const &size )
 {
 	param.width = size.x;
 	param.height = size.y;

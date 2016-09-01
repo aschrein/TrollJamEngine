@@ -4,7 +4,6 @@
 #include <engine/math/mat.hpp>
 #include <engine/os/Async.hpp>
 #include <engine/assets/Mesh.hpp>
-#include <engine/assets/BitMap.hpp>
 #include <engine/data_struct/Optional.hpp>
 #include <engine/mem/Pointers.hpp>
 #include <engine/data_struct/RingBuffer.hpp>
@@ -16,76 +15,104 @@ namespace Graphics
 	using namespace Options;
 	using namespace Pointers;
 	using namespace LockFree;
-	struct Color
+	enum class Usage
 	{
-		union
+		STATIC , DYNAMIC
+	};
+	enum class ComponentType : uint
+	{
+		FLOAT32 , INT , SHORT , BYTE , UNORM8 , UNORM16 , FIVE
+	};
+	enum class ComponentFormat
+	{
+		RGB , RGBA , BGR , BGRA , R
+	};
+	enum class ComponentSwizzle : uint
+	{
+		R , G , B , A , ONE , ZERO
+	};
+	enum class RenderTargetType
+	{
+		COLOR , DEPTH , DEPTH_STENCIL
+	};
+	enum class DepthFormat
+	{
+		DEPTH32_UINT
+	};
+	//default is RGBA
+	struct ComponentMapping
+	{
+		ComponentFormat format;
+		ComponentType type = ComponentType::BYTE;
+	};
+	enum class ImageCompression
+	{
+		NONE
+	};
+	static uint getBpp( ComponentMapping mapping )
+	{
+		bool used[ 4 ] = { false };
+		if( mapping.type == ComponentType::FIVE )
 		{
-			uint base;
-			struct
-			{
-				byte r , g , b , a;
-			};
+			return 2;
+		}
+		static uint _sizes[] =
+		{
+			4 , 4 , 2 , 1 , 1 , 2
 		};
-	};
-	struct Rect2D
-	{
-		i2 pos , size;
-		bool isIn( i2 const &p ) const
+		static uint _comp[] =
 		{
-			return p.x > pos.x && p.y > pos.y && p.x < pos.x + size.x && p.y < pos.y + size.y;
-		}
-	};
-	enum class CommandType
+			3 , 4 , 3 , 4 , 1
+		};
+		return _comp[ ( uint )mapping.format ] * _sizes[ ( uint )mapping.type ];
+	}
+	//strict linear layout and power of two size
+	struct BitMap2D
 	{
-		DRAW_INDEXED_MESH , SET_VIEW_PROJ , CLEAR_COLOR , SET_RENDER_TARGET , FENCE , CLEAR_DEPTH , SET_VIEWPORT , BUFFER_SET_DATA
-	};
-	struct Command
-	{
-		CommandType type;
-		uint64_t key;
 		void const *data;
+		uint size;
+		uint width;
+		uint height;
+		uint depth = 1;
+		uint layers_count = 1;
+		uint mipmaps_count = 1;
+		ImageCompression compression = ImageCompression::NONE;
+		ComponentMapping component_mapping;
+		uint getBpp() const
+		{
+			return Graphics::getBpp( component_mapping );
+		}
 	};
-	struct CommandBuffer
+	enum class Filter : int
 	{
-		Allocator *allocator;
-		Command *base = nullptr;
-		uint pos = 0;
-		uint limit = 0;
-		uint current_fence_length = 0;
-		Command *current_fence = nullptr;
-		CommandBuffer( uint max_cmd_count , Allocator *allocator ) :
-			allocator( allocator ) ,
-			base( ( Command * )allocator->alloc( max_cmd_count * sizeof( Command ) ) ) ,
-			limit( max_cmd_count )
-		{
-			current_fence = ( Command* )( base );
-			push( { CommandType::FENCE } );
-		}
-		CommandBuffer() = default;
-		//NONMOVABLE( CommandBuffer );
-		void push( Command const &command )
-		{
-			base[ pos++ ] = command;
-			current_fence_length++;
-		}
-		Command const &operator[]( uint i ) const
-		{
-			return base[ i ];
-		}
-		void fence()
-		{
-			current_fence->key = current_fence_length;
-			current_fence = ( Command* )( base + pos );
-			current_fence_length = 0;
-		}
-		void *allocate( uint size )
-		{
-			return allocator->alloc( size );
-		}
-		int getSize() const
-		{
-			return pos;
-		}
+		NEAREST , LINEAR
+	};
+	enum class WrapRegime
+	{
+		CLAMP , REPEAT , MIRROR
+	};
+	struct SamplerInfo
+	{
+		Filter mag_filter;
+		Filter min_filter;
+		bool use_mipmap;
+		uint anisotropy_level;
+		WrapRegime x_regime;
+		WrapRegime y_regime;
+		WrapRegime z_regime;
+	};
+	struct RenderTargetInfo
+	{
+		RenderTargetType type;
+		ComponentMapping component_mapping;
+		bool sampled;
+		uint width;
+		uint height;
+	};
+	struct TextureInfo
+	{
+		BitMap2D bitmap;
+		Usage usage;
 	};
 	enum class FillType : uint
 	{
@@ -97,9 +124,10 @@ namespace Graphics
 	};
 	struct Material
 	{
-		uint albedo;
-		uint normal;
-		uint specular;
+		uint albedo_texture_view;
+		uint normal_texture_view;
+		uint roughness_texture_view;
+		uint metalness_texture_view;
 		MaterialType type;
 		bool has_albedo_texture;
 		bool has_normal_texture;
@@ -107,7 +135,7 @@ namespace Graphics
 	};
 	enum class PrimitiveType : uint
 	{
-		TRIANGLES , LINES , PATCHES , QUADS
+		TRIANGLES , LINES , PATCHES , QUADS , POINTS
 	};
 	enum class IndexType : uint
 	{
@@ -115,18 +143,20 @@ namespace Graphics
 	};
 	enum class AttributeSlot : uint
 	{
-		POSITION , NORMAL , TANGENT , BINORMAL , TEXCOORD
+		POSITION , NORMAL , TANGENT , BINORMAL , TEXCOORD , BONEINDICES , BONEWEIGHTS
 	};
-	struct DrawMeshDesc
+	struct DrawMeshInfo
 	{
 		uint *vertex_buffer_handle;
-		uint vertex_buffers_count;
+		uint vertex_buffer_count;
 		uint index_buffer_handle;
+		uint index_layout_handle;
 		uint start_index;
 		uint count;
 		PrimitiveType primitive_type;
-		FillType fill_type;
-		f4x4 *transform;
+		f4x4 transform;
+		qf *skeletal_transform;
+		uint bone_count;
 		Material *material;
 	};
 	struct Attribute
@@ -137,24 +167,113 @@ namespace Graphics
 		PlainFieldType src_type;
 		bool normalized;
 		uint stride;
+		uint buffer_index;
 	};
-	enum class BufferUsage
+	struct VertexLayoutInfo
 	{
-		STATIC_DRAW , DYNAMIC_DRAW
-	};
-	struct AttributeBufferDesc
-	{
-		void *data;
-		BufferUsage usage;
-		uint size;
 		Attribute *attributes;
 		uint attributes_count;
 	};
-	struct IndexBufferDesc
+	struct BufferInfo
 	{
 		void *data;
 		uint size;
-		BufferUsage usage;
-		IndexType index_type;
+		Usage usage;
+	};
+	struct TextureViewInfo
+	{
+		uint texture_handler;
+		ComponentSwizzle swizzle[ 4 ];
+	};
+	class CommandBuffer
+	{
+		friend class CommandBufferPool;
+	private:
+		NONMOVABLE( CommandBuffer );
+	public:
+		void drawIndexed( DrawMeshInfo const *info );
+		void fillBuffer( uint buf_handler , void const *data , uint size );
+		void fillImage( uint img_handler , uint layer , void const *data , uint size );
+		void fence();
+		void *allocate( uint size );
+	};
+	class CommandBufferPool
+	{
+		friend class RenderingBackend;
+	private:
+		NONMOVABLE( CommandBufferPool );
+	public:
+		CommandBuffer *createCommandBuffer();
+	};
+	class UniqueHandler
+	{
+	private:
+		uint handler;
+		RenderingBackend *queue;
+		void( RenderingBackend::*deleter )( uint );
+	public:
+		UniqueHandler() = default;
+		UniqueHandler( UniqueHandler  const & ) = delete;
+		UniqueHandler &operator=( UniqueHandler  const & ) = delete;
+		UniqueHandler( UniqueHandler &&p )
+		{
+			*this = std::move( p );
+		}
+		UniqueHandler &operator=( UniqueHandler &&p )
+		{
+			handler = p.handler;
+			queue = p.queue;
+			deleter = p.deleter;
+			p.handler = 0;
+			p.queue = 0;
+			p.deleter = 0;
+			return *this;
+		}
+		uint const &operator*() const
+		{
+			return handler;
+		}
+		void release()
+		{
+			if( deleter )
+			{
+				( *queue.*deleter )( handler );
+			}
+			handler = 0;
+			queue = 0;
+			deleter = 0;
+		}
+		~UniqueHandler()
+		{
+			release();
+		}
+	};
+	class RenderingBackend
+	{
+		friend class Windows;
+	private:
+		
+	public:
+		NONMOVABLE( RenderingBackend );
+		bool isReady();
+		void wait();
+		void render();
+		void pushCommand( CommandBufferPool *cmd );
+		uint getSwapBuffersCount() const;
+		CommandBufferPool createCommandPool();
+
+		uint createVertexBuffer( BufferInfo const *info );
+		uint createIndexBuffer( BufferInfo const *info );
+		uint createVertexLayout( VertexLayoutInfo const *info );
+		uint createTexture( TextureInfo const *info );
+		uint createTextureView( TextureViewInfo const *info );
+		uint createRenderTarget( RenderTargetInfo const *info );
+		uint createSampler( SamplerInfo const *info );
+		void freeVertexBuffer( uint hndl );
+		void freeIndexBuffer( uint hndl );
+		void freeTexture( uint hndl );
+		void freeTextureView( uint hndl );
+		void freeVertexLayout( uint hndl );
+		void freeSampler( uint hndl );
 	};
 }

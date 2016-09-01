@@ -68,14 +68,25 @@ namespace OS
 		{
 			lazy = th.lazy;
 			hndl = th.hndl;
+			flag = th.flag;
 			th.hndl = 0;
 			return *this;
+		}
+		Signal::Signal( bool lazy ):
+			lazy( lazy )
+		{
+			if( !lazy )
+			{
+				hndl = CreateEvent( NULL , TRUE , FALSE , NULL );
+				flag = false;
+			}
 		}
 		void Signal::wait( uint32_t milis )
 		{
 			if( !hndl )
 			{
 				hndl = CreateEvent( NULL , TRUE , FALSE , NULL );
+				flag = false;
 			}
 			auto result = WaitForSingleObject( hndl , milis );
 		}
@@ -84,16 +95,19 @@ namespace OS
 			if( hndl )
 			{
 				auto result = ResetEvent( hndl );
+				flag = false;
 			}
 		}
 		void Signal::signal()
 		{
-			if( !hndl && !lazy )
+			if( !hndl )
 			{
-				hndl = CreateEvent( NULL , TRUE , TRUE , NULL );
-			} else if( hndl )
+				hndl = CreateEvent( NULL , TRUE , FALSE , NULL );
+			}
+			if( hndl )
 			{
 				SetEvent( hndl );
+				flag = true;
 			}
 		}
 		Signal::~Signal()
@@ -101,56 +115,57 @@ namespace OS
 			if( hndl )
 			{
 				CloseHandle( hndl );
-				hndl = 0;
 			}
+			flag = false;
+			hndl = 0;
 		}
 	}
 	namespace Atomic
 	{
 		bool AtomicFlag::capture()
 		{
-			return !InterlockedCompareExchangeAcquire( &flag , 1 , 0 );
+			return !InterlockedCompareExchange64( &flag , 1 , 0 );
 		}
-		bool AtomicFlag::isSet()
+		bool AtomicFlag::isSet() const
 		{
-			return InterlockedCompareExchangeAcquire( &flag , 1 , 1 );
+			return InterlockedCompareExchange64( &flag , 1 , 1 );
 		}
 		void AtomicFlag::set()
 		{
-			InterlockedExchange( &flag , 1 );
+			InterlockedExchange64( &flag , 1 );
 		}
 		void AtomicFlag::reset()
 		{
-			InterlockedExchange( &flag , 0 );
+			InterlockedExchange64( &flag , 0 );
 		}
-		unsigned long AtomicCounter::operator++()
+		int64_t AtomicCounter::operator++()
 		{
-			return InterlockedIncrement( &counter ) - 1;
+			return InterlockedIncrement64( &counter );
 		}
-		unsigned long AtomicCounter::operator++( int )
+		int64_t AtomicCounter::operator++( int )
 		{
-			return InterlockedIncrement( &counter );
+			return InterlockedIncrement64( &counter ) - 1;
 		}
-		unsigned long AtomicCounter::operator--()
+		int64_t AtomicCounter::operator--()
 		{
-			return InterlockedDecrement( &counter ) + 1;
+			return InterlockedDecrement64( &counter );
 		}
-		unsigned long AtomicCounter::operator--( int )
+		int64_t AtomicCounter::operator--( int )
 		{
-			return InterlockedDecrement( &counter );
+			return InterlockedDecrement64( &counter ) + 1;
 		}
-		AtomicCounter &AtomicCounter::operator=( uint64_t value )
+		AtomicCounter &AtomicCounter::operator=( int64_t value )
 		{
-			InterlockedExchange( &counter , value );
+			InterlockedExchange64( &counter , value );
 			return *this;
 		}
-		uint64_t AtomicCounter::get() const
+		int64_t AtomicCounter::get() const
 		{
-			return InterlockedCompareExchangeAcquire( &counter , counter , counter );
+			return counter;
 		}
 		bool AtomicCounter::operator==( AtomicCounter const &c ) const
 		{
-			return c.counter == counter;
+			return counter == c.counter;
 		}
 		bool AtomicCounter::operator!=( AtomicCounter const &c ) const
 		{

@@ -1,5 +1,5 @@
 #pragma once
-#include <engine/data_struct/Array.hpp>
+#include <engine/data_struct/RingBuffer.hpp>
 #include <engine/os/Atomic.hpp>
 #include <engine/os/Async.hpp>
 namespace LockFree
@@ -7,18 +7,18 @@ namespace LockFree
 	using namespace Collections;
 	using namespace OS::Atomic;
 	using namespace OS::Async;
-	template< typename T >
+	template< typename T , int N >
 	class Consumer
 	{
 	private:
-		Array< T > events;
+		RingBuffer< T , N > events;
 		Signal signal;
-		AtomicFlag event_transaction_flag;
 	public:
-		Consumer( Allocator *allocator = Allocator::singleton )
-		{
-			events.setAllocator( allocator );
-		}
+		Consumer( Consumer const & ) = delete;
+		Consumer &operator=( Consumer const & ) = delete;
+		Consumer( Consumer && ) = default;
+		Consumer &operator=( Consumer && ) = default;
+		Consumer() = default;
 		void pushEvent( T const &file_event )
 		{
 			auto tmp = file_event;
@@ -26,52 +26,21 @@ namespace LockFree
 		}
 		void pushEvent( T &&file_event )
 		{
-			while( true )
-			{
-				if( event_transaction_flag.capture() )
-				{
-					events.push( std::move( file_event ) );
-					event_transaction_flag.reset();
-					signal.signal();
-					return;
-				}
-			}
+			events.push( std::move( file_event ) );
+			signal.signal();
 		}
-		Result< T > popEvent( bool wait = false )
+		T popEvent( bool wait = true )
 		{
-			while( true )
+			if( events.isEmpty() && wait )
 			{
-once_again:
-				if( event_transaction_flag.capture() )
-				{
-					if( !events.isEmpty() )
-					{
-						T out( std::move( events.pop() ) );
-						event_transaction_flag.reset();
-						return Result< T >( std::move( out ) );
-					} else if( wait )
-					{
-						event_transaction_flag.reset();
-						signal.wait();
-						wait = false;
-						goto once_again;
-					}
-					event_transaction_flag.reset();
-					return Result< T >();
-				}
+				signal.wait();
+				signal.reset();
 			}
+			return events.pop();
 		}
 		bool isEmpty()
 		{
-			while( true )
-			{
-				if( event_transaction_flag.capture() )
-				{
-					bool empty = events.isEmpty();
-					event_transaction_flag.reset();
-					return empty;
-				}
-			}
+			return events.isEmpty();
 		}
 	};
 }

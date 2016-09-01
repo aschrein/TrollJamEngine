@@ -3,59 +3,95 @@
 #include <engine/assets/FileManager.hpp>
 namespace Assets
 {
-	class Factory
+	enum class AssetEventType
 	{
-
+		UPDATE
 	};
-	template< typename T >
-	class PipeLine : public FileConsumer
+	struct AssetEvent
+	{
+		AssetEventType type;
+		void const *product;
+		String name;
+	};
+	class AssetNode : public LockFree::Consumer< AssetEvent , 10 >
 	{
 	private:
-		Array< String > filenames;
+		typedef std::function< void *( HashMap< String , void const* > const & , Allocator * ) > Pipe;
+		typedef std::function< void( void * , Allocator * ) > Releaser;
 		Allocator *allocator = nullptr;
-		FileManager *file_manager = nullptr;
-		std::function< T( T , FileImage const* ) > factory = nullptr;
-		T final_data;
-		bool present = false;
-		NONMOVABLE( PipeLine );
-		PipeLine *parent = nullptr;
+		Pipe pipe;
+		Releaser releaser;
+		void *product = nullptr;
+		Array< AssetNode* > consumers;
+		HashMap< String , void const* > dependencies;
+		String product_name;
+		uint dependency_count;
 	public:
-		PipeLine( Array< String > filenames , std::function< T( FileImage * ) > factory , PipeLine *parent = nullptr , FileManager *file_manager = FileManager::singleton , Allocator *allocator = Allocator::singleton ):
-			factory( factory ) ,
+		NONMOVABLE( AssetNode );
+		AssetNode( uint dependency_count , Pipe pipe , Releaser releaser , String product_name , Allocator *allocator = Allocator::singleton ):
+			pipe( pipe ) ,
+			releaser( releaser  ) ,
+			product_name( product_name ) ,
 			allocator( allocator ) ,
-			file_manager( file_manager ) ,
-			parent( parent )
+			dependency_count( dependency_count )
 		{
-			this->filenames.setAllocator( allocator );
-			this->filenames = filenames;
+			consumers.setAllocator( allocator );
+			dependencies.setAllocator( allocator );
+		}
+		~AssetNode()
+		{
+			if( product )
+			{
+				releaser( product , allocator );
+				product = nullptr;
+			}
 		}
 		void update()
 		{
-			auto file_res = popEvent();
-			if( file_res.isPresent() )
+			bool update = false;
+			while( !isEmpty() )
 			{
-				do
+				auto event = popEvent();
+				if( dependencies.contains( event.name ) )
 				{
-					auto file_event = file_res.getValue();
-					if( file_event.type == FileEvent::EventType::LOADED && file_event.file_result.isPresent() )
+					if( dependency_count == 0 )
 					{
-						FileImage file_image = std::move( file_event.file_result.getValue() );
-						final_data = factory( final_data , &file_image );
-						present = true;
-					} else if( file_event.type == FileEvent::EventType::UPDATED )
-					{
-						file_manager->loadFile( filename , this , allocator );
+						update = true;
 					}
-				} while( ( file_res = popEvent() ).isPresent() );
+				} else
+				{
+					dependencies.push( event.name , event.product );
+					dependency_count--;
+				}
+				if( dependency_count == 0 && !product )
+				{
+					update = true;
+				}
+			}
+			if( update )
+			{
+				if( product )
+				{
+					releaser( product , allocator );
+				}
+				product = pipe( dependencies , allocator );
+			}
+			if( update )
+			{
+				AssetEvent event = { AssetEventType::UPDATE , product , product_name };
+				for( auto &consumer : consumers )
+				{
+					consumer->pushEvent( event );
+				}
 			}
 		}
-		T getValue()
+		void const *getProduct()
 		{
-			return final_data;
+			return product;
 		}
 		bool isPresent() const
 		{
-			return present;
+			return product;
 		}
 	};
 }

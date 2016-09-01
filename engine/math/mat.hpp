@@ -164,7 +164,7 @@ namespace Math
 	namespace MatUtil
 	{
 		template< typename T >
-		CALLMOD TMatrix< T , 3 , 3 > rotate( const f3 &nax , T ang )
+		CALLMOD TMatrix< T , 3 , 3 > rotate( const float3 &nax , T ang )
 		{
 			float sa = MathUtil<T>::sin( ang ) , ca = MathUtil<T>::cos( ang );
 			float oa = 1.0 - ca;

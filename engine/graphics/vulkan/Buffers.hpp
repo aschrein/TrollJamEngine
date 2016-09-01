@@ -41,30 +41,30 @@ namespace VK
 			rm.free( offset );
 		}
 	};
+	struct MemoryContainer
+	{
+		Memory *ptr = nullptr;
+		MemoryContainer() = default;
+		MemoryContainer( Memory *ptr ) :
+			ptr( ptr )
+		{}
+		MemoryContainer( MemoryContainer  const & ) = delete;
+		MemoryContainer &operator=( MemoryContainer  const & ) = delete;
+		MemoryContainer( MemoryContainer &&mc )
+		{
+			*this = std::move( mc );
+		}
+		MemoryContainer &operator=( MemoryContainer &&mc )
+		{
+			ptr = mc.ptr;
+			mc.ptr = nullptr;
+			return *this;
+		}
+	};
 	class Buffer
 	{
 		VK_OBJECT( Buffer );
 	private:
-		struct MemoryContainer
-		{
-			Memory *ptr = nullptr;
-			MemoryContainer() = default;
-			MemoryContainer( Memory *ptr ) :
-				ptr( ptr )
-			{}
-			MemoryContainer( MemoryContainer  const & ) = delete;
-			MemoryContainer &operator=( MemoryContainer  const & ) = delete;
-			MemoryContainer( MemoryContainer &&mc )
-			{
-				*this = std::move( mc );
-			}
-			MemoryContainer &operator=( MemoryContainer &&mc )
-			{
-				ptr = mc.ptr;
-				mc.ptr = nullptr;
-				return *this;
-			}
-		};
 		Unique< VkBuffer > buffer;
 		Optional< MemoryContainer , Unique< VkDeviceMemory > > memory;
 		uint offset;
@@ -72,8 +72,8 @@ namespace VK
 		VkDevice dev_raw;
 	public:
 		static Buffer create(
-			Device const &device , BufferTarget usage ,
-			MemoryType mem_type , uint size ,
+			Device const &device , VkBufferUsageFlags usage ,
+			uint mem_type , uint size ,
 			void const *data = nullptr
 		)
 		{
@@ -82,7 +82,7 @@ namespace VK
 			Allocator::zero( &info );
 			info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 			info.size = size;
-			info.usage = getVK( usage );
+			info.usage = usage;
 			out.buffer.create( device.getHandle() , info );
 			VkMemoryRequirements mem_req;
 			vkGetBufferMemoryRequirements( device.getHandle() , *out.buffer , &mem_req );
@@ -93,7 +93,7 @@ namespace VK
 			Allocator::zero( &alloc_info );
 			alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 			alloc_info.allocationSize = mem_req.size;
-			alloc_info.memoryTypeIndex = device.getPhysicalDevice().getMemoryIndex( mem_req.memoryTypeBits , getVK( mem_type ) );
+			alloc_info.memoryTypeIndex = device.getPhysicalDevice().getMemoryIndex( mem_req.memoryTypeBits , mem_type );
 			Unique< VkDeviceMemory > self_memory;
 			self_memory.create( device.getHandle() , alloc_info );
 			vkBindBufferMemory( device.getHandle() , *out.buffer , *self_memory , 0 );
@@ -107,14 +107,14 @@ namespace VK
 			return out;
 		}
 		static Buffer create(
-			Device const &device , BufferTarget usage , Memory *memory , uint size )
+			Device const &device , VkBufferUsageFlags usage , Memory *memory , uint size )
 		{
 			Buffer out;
 			VkBufferCreateInfo info;
 			Allocator::zero( &info );
 			info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 			info.size = size;
-			info.usage = getVK( usage );
+			info.usage = usage;
 			out.buffer.create( device.getHandle() , info );
 			VkMemoryRequirements mem_req;
 			vkGetBufferMemoryRequirements( device.getHandle() , *out.buffer , &mem_req );

@@ -46,13 +46,13 @@ namespace VK
 			out.create( *handle , semaphore_create_info );
 			return out;
 		}
-		Unique< VkShaderModule > createShaderModule( FileImage const *image ) const
+		Unique< VkShaderModule > createShaderModule( void const *data , uint size ) const
 		{
 			VkShaderModuleCreateInfo shader_module_create_info;
 			Allocator::zero( &shader_module_create_info );
 			shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-			shader_module_create_info.codeSize = image->getView().getLimit();
-			shader_module_create_info.pCode = ( const uint32_t* )image->getView().getRaw();
+			shader_module_create_info.codeSize = size;
+			shader_module_create_info.pCode = ( const uint32_t* )data;
 			Unique< VkShaderModule > out;
 			out.create( *handle , shader_module_create_info );
 			return out;

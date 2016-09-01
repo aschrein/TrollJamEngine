@@ -13,36 +13,36 @@ namespace Physics
 	};
 	struct AABB
 	{
-		f3 center;
-		f3 size;
+		float3 center;
+		float3 size;
 	};
 	struct Sphere
 	{
-		f3 pos;
+		float3 pos;
 		float radius;
 	};
 	struct Cilinder
 	{
-		f3 pos;
-		f3 dir;
+		float3 pos;
+		float3 dir;
 		float radius;
 	};
 	struct Cone
 	{
-		f3 pos;
-		f3 dir;
+		float3 pos;
+		float3 dir;
 		float radius;
 	};
 	struct Pyramid
 	{
-		f3 pos;
-		f3 dir;
-		f2 size;
+		float3 pos;
+		float3 dir;
+		float2 size;
 	};
 	struct Plane
 	{
-		f3 pos;
-		f3 dir;
+		float3 pos;
+		float3 dir;
 	};
 	struct OBB
 	{
@@ -51,7 +51,7 @@ namespace Physics
 	};
 	struct Triangle
 	{
-		f3 p0 , p1 , p2;
+		float3 p0 , p1 , p2;
 	};
 	struct ConvexMesh
 	{
@@ -64,10 +64,10 @@ namespace Physics
 	};
 	struct PysicsBodyState
 	{
-		f3 pos;
+		float3 pos;
 		qf orientation;
 		qf angle_vel;
-		f3 vel;
+		float3 vel;
 	};
 	struct PhysicsShape
 	{
@@ -90,10 +90,10 @@ namespace Physics
 	};
 	struct Collision
 	{
-		f3 pos;
-		f3 norm;
-		f3 tang;
-		f3 binorm;
+		float3 pos;
+		float3 norm;
+		float3 tang;
+		float3 binorm;
 		float depth;
 	};
 }

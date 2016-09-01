@@ -4,12 +4,14 @@
 #include <engine/data_struct/HashSet.hpp>
 #include <engine/components/Reflection.hpp>
 #include <engine/data_struct/Buffer.hpp>
+#include <engine/components/Event.hpp>
 #include <engine/graphics/Graphics.hpp>
 #include <engine/physics/Physics.hpp>
 class Object;
 using namespace Collections;
 using namespace Physics;
 using namespace EventSystem;
+using namespace Allocators;
 class RTTI
 {
 private:
@@ -120,7 +122,7 @@ public:
 	{
 		state.pos += state.vel * dt;
 	}
-	void appendForce( f3 const &pos , f3 const &force , float dt )
+	void appendForce( float3 const &pos , float3 const &force , float dt )
 	{
 		state.vel += force * prop.invmass;
 	}
@@ -145,7 +147,7 @@ protected:
 	NONMOVABLE( PysicalWorld );
 	Allocator *allocator;
 public:
-	Unique< PysicalWorld > create( Allocator *allocator = Allocator::singleton );
+	Pointers::Unique< PysicalWorld > create( Allocator *allocator = Allocator::singleton );
 	void update();
 	uint add( PhysicsComponent* );
 	void remove( uint );
@@ -162,7 +164,7 @@ protected:
 	NONMOVABLE( VisualWorld );
 	Allocator *allocator;
 public:
-	Unique< VisualWorld > create( Allocator *allocator = Allocator::singleton );
+	Pointers::Unique< VisualWorld > create( Allocator *allocator = Allocator::singleton );
 	void render();
 	int add( GraphicsComponent* );
 	void remove( uint );

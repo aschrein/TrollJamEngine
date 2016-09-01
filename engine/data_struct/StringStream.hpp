@@ -81,8 +81,8 @@ namespace Collections
 		float getFloat();
 		int getInt();
 		uint getUint();
-		f2 getVec2();
-		f3 getVec3();
-		i3 getiVec3();
+		float2 getVec2();
+		float3 getVec3();
+		int3 getiVec3();
 	};
 }

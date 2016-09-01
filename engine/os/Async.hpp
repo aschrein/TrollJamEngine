@@ -35,8 +35,9 @@ namespace OS
 			HANDLE hndl = 0;
 #endif
 			bool lazy;
+			bool flag;
 		public:
-			Signal( bool lazy = true ) : lazy( lazy ) {}
+			Signal( bool lazy = true );
 			Signal( Signal const & ) = delete;
 			Signal& operator=( Signal const & ) = delete;
 			Signal( Signal &&th );

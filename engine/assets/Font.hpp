@@ -9,7 +9,7 @@ using namespace Collections;
 struct BMFontInfo
 {
 	static const int MAX_CHARS = 0x100;
-	i4 bounds[ MAX_CHARS ];
+	int4 bounds[ MAX_CHARS ];
 };
 static BMFontInfo parseBMFont( char const *file_image , Allocator *allocator = Allocator::singleton )
 {

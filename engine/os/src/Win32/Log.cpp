@@ -28,6 +28,7 @@ namespace OS
 		template struct DebugLog< const char * >;
 		template struct DebugLog< uint64_t >;
 		template struct DebugLog< uint32_t >;
+		template struct DebugLog< int64_t >;
 		template struct DebugLog< Collections::String >;
 	}
 }

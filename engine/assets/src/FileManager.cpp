@@ -93,10 +93,9 @@ void FileManagerImpl::mainLoop()
 #endif
 	while( working_flag.isSet() )
 	{
-		Result< PromiseGiven > promise_result;
-		while( ( promise_result = promise_pool.pop() ).isPresent() )
+		while( !promise_pool.isEmpty() )
 		{
-			auto promise_given = promise_result.getValue();
+			auto promise_given = promise_pool.pop();
 			for( auto const &filename : promise_given.filenames )
 			{
 				addSubscriber( filename , promise_given.file_consumer );

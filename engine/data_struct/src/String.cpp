@@ -60,15 +60,15 @@ namespace Collections
 		pos = int( next_break - text );
 		return out;
 	}
-	f2 StringStream::getVec2()
+	float2 StringStream::getVec2()
 	{
 		return{ getFloat() , getFloat() };
 	}
-	f3 StringStream::getVec3()
+	float3 StringStream::getVec3()
 	{
 		return{ getFloat() , getFloat() , getFloat() };
 	}
-	i3 StringStream::getiVec3()
+	int3 StringStream::getiVec3()
 	{
 		return{ getInt() , getInt() , getInt() };
 	}

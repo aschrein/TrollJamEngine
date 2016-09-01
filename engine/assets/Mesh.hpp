@@ -11,28 +11,34 @@ namespace Assets
 		using namespace Math;
 		using namespace Allocators;
 		using namespace Collections;
-		struct SimpleMesh3D
+		struct VertexGather
 		{
-			Allocator *allocator;
-			Array< f3 > positions;
-			Array< f3 > normals;
-			Array< i3 > faces;
+			uint pos_id;
+			uint normal_id;
+			uint uv_ids[ 4 ];
 		};
-		static SimpleMesh3D parseSimpleMesh3d( char const *file_image , Allocator *allocator = Allocator::singleton )
+		struct Mesh3D
+		{
+			Array< float3 > positions;
+			Array< float3 > normals;
+			Array< float2 > tex_coords[ 4 ];
+			Array< VertexGather > faces;
+		};
+		static Mesh3D parseSimpleMesh3d( char const *file_image , Allocator *allocator = Allocator::singleton )
 		{
 
 			StringStream ss = { file_image , allocator , 0 };
 			String mesh_name = ss.getString();
 			String area_name = ss.getString();
-			Array< f3 > normals;
+			Array< float3 > normals;
 			normals.setAllocator( allocator );
-			Array< f3 > positions;
+			Array< float3 > positions;
 			positions.setAllocator( allocator );
-			Array< f2 > tex_coords;
+			Array< float2 > tex_coords;
 			tex_coords.setAllocator( allocator );
-			Array< i3 > faces;
-			faces.setAllocator( allocator );
-			Array< i3 > texture_faces;
+			Array< uint3 > vertex_faces;
+			vertex_faces.setAllocator( allocator );
+			Array< uint3 > texture_faces;
 			texture_faces.setAllocator( allocator );
 			String texture_filename( allocator );
 			while( area_name != "" )
@@ -60,7 +66,7 @@ namespace Assets
 				{
 					while( ( area_name = ss.getString( ' ' , '\n' , '\r' ) ) == "f" )
 					{
-						faces.push( ss.getiVec3() );
+						vertex_faces.push( ss.getiVec3() );
 					}
 				} else if( area_name == "TEXTURE_FACE" )
 				{
@@ -73,7 +79,8 @@ namespace Assets
 					break;
 				}
 			}
-			return{ allocator , std::move( positions ) , std::move( normals ) , std::move( faces ) };
+			Array< VertexGather > faces;
+			return{ std::move( positions ) , std::move( normals ) , { std::move( tex_coords ) } , std::move( faces ) };
 		}
 	}
 }

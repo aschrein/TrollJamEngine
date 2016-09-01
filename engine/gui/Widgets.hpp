@@ -28,7 +28,7 @@ namespace GUI
 	protected:
 		Widget* parent;
 		Array< Widget* > childs;
-		Graphics::Rect2D rect;
+		int4 rect;
 		int z = 0;
 		bool isfocused = false;
 	public:
@@ -52,7 +52,7 @@ namespace GUI
 		}
 		virtual void consumeInput( OS::InputState::Event & ) = 0;
 		virtual void update( Graphics::CommandBuffer & , float dt ) = 0;
-		Graphics::Rect2D getRect() const
+		int4 getRect() const
 		{
 			return rect;
 		}
@@ -76,7 +76,7 @@ namespace GUI
 			child->parent = nullptr;
 			return *this;
 		}
-		virtual void setRect( Graphics::Rect2D const &rect )
+		virtual void setRect( int4 const &rect )
 		{
 			this->rect = rect;
 		}

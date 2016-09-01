@@ -18,7 +18,7 @@ bool QTreeTest()
 		uint total_size = 0;
 		ito( 2 )
 		{
-			f3 new_pos;
+			float3 new_pos;
 			jto( 1 )
 			{
 				new_pos[ j ] = ( int( i >> j ) & 1 ) * 2 - 1;
@@ -40,7 +40,7 @@ bool QTreeTest()
 		uint total_size = 0;
 		ito( 4 )
 		{
-			f3 new_pos;
+			float3 new_pos;
 			jto( 2 )
 			{
 				new_pos[ j ] = ( int( i >> j ) & 1 ) * 2 - 1;
@@ -59,7 +59,7 @@ bool QTreeTest()
 			auto origin = Timer::getCurrentTimeMilis();
 			ito( 5000 )
 			{
-				qtree.push( i , { RandomFactory< float >::getRandomInSphere() * 100.0f , f3{ 0.0f , 0.0f , 0.0f } } );
+				qtree.push( i , { RandomFactory< float >::getRandomInSphere() * 100.0f , float3{ 0.0f , 0.0f , 0.0f } } );
 			}
 			auto end = Timer::getCurrentTimeMilis();
 			OS::IO::debugLogln( "adding 5000 elems " , end - origin );
@@ -67,7 +67,7 @@ bool QTreeTest()
 		uint total_size = 0;
 		ito( 8 )
 		{
-			f3 new_pos;
+			float3 new_pos;
 			jto( 3 )
 			{
 				new_pos[ j ] = ( int( i >> j ) & 1 ) * 2 - 1;

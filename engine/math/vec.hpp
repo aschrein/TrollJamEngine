@@ -36,9 +36,43 @@ namespace Math
 	{
 		T __data[ N ];
 	};
-	template< int N , typename T >
-	struct TVector;
-	template< >
+	template< typename T >
+	struct TVecBase < 3 , T >
+	{
+		union
+		{
+			T __data[ 3 ];
+			struct
+			{
+				T x , y , z;
+			};
+		};
+	};
+	template< typename T >
+	struct TVecBase < 2 , T >
+	{
+		union
+		{
+			T __data[ 2 ];
+			struct
+			{
+				T x , y;
+			};
+		};
+	};
+	template< typename T >
+	struct TVecBase < 4 , T >
+	{
+		union
+		{
+			T __data[ 4 ];
+			struct
+			{
+				T x , y , z , w;
+			};
+		};
+	};
+	/*template< >
 	struct TVecBase < 3 , float >
 	{
 		union
@@ -97,7 +131,7 @@ namespace Math
 				float x , y;
 			};
 		};
-	};
+	};*/
 #define DATA this->__data
 	template< int N , typename T >
 	struct TVector : public TVecBase < N , T >
@@ -352,14 +386,20 @@ namespace Math
 		float s = TVector< 2 , T >::M::sin( a );
 		return TVector< 2 , T >( v.x * c - v.y * s , v.y * c + v.x * s );
 	}
-	typedef TVector< 2 , float > f2;
-	typedef TVector< 2 , int > i2;
-	typedef TVector< 4 , int > i4;
-	typedef TVector< 2 , unsigned int > u2;
-	typedef TVector< 3 , float > f3;
-	typedef TVector< 4 , float > f4;
-	typedef TVector< 3 , unsigned char > b3;
-	typedef TVector< 2 , unsigned short > short2;
-	typedef TVector< 3 , int > i3;
+	typedef TVector< 2 , float > float2;
+	typedef TVector< 3 , float > float3;
+	typedef TVector< 4 , float > float4;
+	typedef TVector< 2 , int32_t > int2;
+	typedef TVector< 3 , int32_t > int3;
+	typedef TVector< 4 , int32_t > int4;
+	typedef TVector< 2 , uint32_t > uint2;
+	typedef TVector< 3 , uint32_t > uint3;
+	typedef TVector< 4 , uint32_t > uint4;
+	typedef TVector< 2 , int16_t > short2;
+	typedef TVector< 3 , int16_t > short3;
+	typedef TVector< 4 , int16_t > short4;
+	typedef TVector< 2 , int8_t > byte2;
+	typedef TVector< 3 , int8_t > byte3;
+	typedef TVector< 4 , int8_t > byte4;
 #undef DATA
 }

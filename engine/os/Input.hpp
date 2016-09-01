@@ -15,7 +15,7 @@ namespace OS
 			static const int MAX_PTR_KEY = 10;
 			bool keyboard_state[ MAX_KEY ] = { false };
 			bool ptr_key_state[ MAX_PTR_KEY ] = { false };
-			i3 ptr_pos;
+			int3 ptr_pos;
 		};
 		struct Event
 		{
