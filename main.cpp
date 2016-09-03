@@ -343,7 +343,7 @@ int main( int argc , char ** argv )
 			renderer->wait();
 			//OS::IO::debugLogln( "update thread woked up" );
 			//renderer->pushCommand( cmd_buffer );
-			renderer->render();
+			renderer->render(nullptr);
 		}
 	}
 	);

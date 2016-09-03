@@ -296,6 +296,7 @@ namespace VK
 	template<> struct UniqueBase< VkPipelineLayout > : public DevChild< VkPipelineLayout , VkPipelineLayoutCreateInfo , vkCreatePipelineLayout , vkDestroyPipelineLayout > {};
 	template<> struct UniqueBase< VkDescriptorPool > : public DevChild< VkDescriptorPool , VkDescriptorPoolCreateInfo , vkCreateDescriptorPool , vkDestroyDescriptorPool > {};
 	template<> struct UniqueBase< VkDescriptorSetLayout > : public DevChild< VkDescriptorSetLayout , VkDescriptorSetLayoutCreateInfo , vkCreateDescriptorSetLayout , vkDestroyDescriptorSetLayout > {};
+	template<> struct UniqueBase< VkSampler > : public DevChild< VkSampler , VkSamplerCreateInfo , vkCreateSampler , vkDestroySampler > {};
 
 	template< typename T >
 	class Unique

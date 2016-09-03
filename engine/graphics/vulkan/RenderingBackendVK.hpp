@@ -4,27 +4,49 @@
 #include <engine/graphics/Graphics.hpp>
 #include <engine/graphics/vulkan/defines.hpp>
 #include <engine/data_struct/Buffer.hpp>
+#include <engine/data_struct/Tuple.hpp>
+#include <engine/graphics/vulkan/Queue.hpp>
+#include <engine/graphics/vulkan/CommandBuffer.hpp>
+#include <engine/graphics/vulkan/ObjectPool.hpp>
 #include <engine/os/Window.hpp>
-namespace VK
+namespace VKInterface
 {
-	using namespace Graphics;
 	using namespace Collections;
-	enum class CreationType
+	using namespace OS::Atomic;
+	using namespace OS::Async;
+	using namespace LockFree;
+	class RenderingBackend;
+	struct DrawCallInfo
 	{
-		VERTEX_BUFFER , INDEX_BUFFER , TEXTURE , TEXTURE_VIEW , SAMPLER , RENDER_TARGET
+		void const *data;
+		void( *dispatch )( RenderingBackend* , void const * );
+		uint64_t key;
+	};
+	class CommandBuffer : public Graphics::CommandBuffer
+	{
+	public:
+		Allocator *allocator;
+		Array< DrawCallInfo > draw_calls;
+		Pointers::Unique< LinearAllocator > linear_allocator;
+	};
+	class CommandPool : public Graphics::CommandPool
+	{
+	public:
+		Allocator *allocator = Allocator::singleton;
+		LocalArray< Pair< uint , CommandBuffer > , 100 > buffers_per_pass;
 	};
 	struct CreationDesc
 	{
-		void const *data;
-		CreationType type;
+		void *data;
+		void( *dispatch )( RenderingBackend* , void* , uint );
 		uint handler;
 	};
-	class RenderingBackendVK : public RenderingBackend
+	class RenderingBackend : public Graphics::RenderingBackend
 	{
 		friend class Window;
 		
 	public:
-		VK_OBJECT( RenderingBackendVK );
+		VK_OBJECT( RenderingBackend );
 #ifdef _WIN32
 		HDC hdc;
 #endif
@@ -36,9 +58,19 @@ namespace VK
 		Signal render_signal = Signal( false );
 		Allocators::Allocator *allocator;
 		OS::Window *wnd;
+		VK::Device device;
+		VK::Instance instance;
+		VK::SwapChain swap_chain;
+		VK::Memory dev_mem;
+		VK::Memory host_mem;
+		VK::CommandPool cmd_pool;
+		VK::CommandBuffer cmd_buf;
+		VK::Queue graphics_queue;
+		VK::ObjectPool object_pool;
+		Pointers::Unique< Graphics::CommandPool > current_command_pool = nullptr;
+
 		//RingBuffer< CommandBufferPool* , 20 > command_queue;
 		RingBuffer< CreationDesc , 1000 > creation_queue;
-		uint pushCreationQueue( CreationDesc desc );
 		void mainloop();
 	};
 }

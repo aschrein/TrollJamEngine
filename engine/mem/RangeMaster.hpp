@@ -12,7 +12,7 @@ namespace Allocators
 		HashMap< uint , uint > free_ranges;
 		HashMap< uint , uint > allocated_ranges;
 		BinaryTree< uint > free_ranges_tree;
-		uint upper_border;
+		uint upper_border = 0;
 	public:
 		RangeManager( uint upper_border , Allocator *allocator = Allocator::singleton ) :
 			upper_border( upper_border )

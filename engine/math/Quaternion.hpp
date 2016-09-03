@@ -10,10 +10,10 @@ namespace Math
 			T __data[ 4 ];
 			struct
 			{
-				T x , y , z , w;
+				T w , x , y , z;
 			};
 		};
-		CALLMOD Quaternion( T x , T y , T z , T w ) :
+		CALLMOD Quaternion( T w , T x , T y , T z ) :
 			x( x ) , y( y ) , z( z ) , w( w )
 		{}
 		CALLMOD Quaternion() :
@@ -37,7 +37,7 @@ namespace Math
 			x = axis.x;
 			y = axis.y;
 			z = axis.z
-			w = T( 0 );
+			w = T( 1 );
 		}
 		CALLMOD Quaternion const operator+( Quaternion const &a ) const
 		{
@@ -87,10 +87,10 @@ namespace Math
 		CALLMOD Quaternion const operator*( Quaternion const &a ) const
 		{
 			return Quaternion(
-				x * a.x - y * a.y - z * a.z - w * a.w ,
-				x * a.y + y * a.x + z * a.w - w * a.z ,
-				x * a.z - y * a.w + z * a.x + w * a.y ,
-				x * a.w + y * a.z - z * a.y + w * a.x
+				w * a.w - x * a.x - y * a.y - z * a.z ,
+				x * a.w + w * a.x + y * a.z - z * a.y ,
+				y * a.w + w * a.y - x * a.z + z * a.x ,
+				z * a.w + w * a.z + x * a.y - y * a.x ,
 				);
 		}
 		CALLMOD Quaternion &operator*=( Quaternion const &a )
@@ -124,11 +124,12 @@ namespace Math
 		}
 		CALLMOD Quaternion operator!() const
 		{
-			return Quaternion( x , -y , -z , -w );
+			return Quaternion( w , -x , -y , -z );
 		}
 		TVector< 3 , T > rotate( TVector< 3 , T > const &a ) const
 		{
-			return 
+			auto res = *this * Quaternion( 0 , a.x , a.y , a.z ) / *this;
+			return{ res.x , res.y , res.z };
 		}
 	};
 	template< typename T >

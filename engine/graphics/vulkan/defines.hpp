@@ -2,12 +2,11 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 #include <engine/mem/Allocators.hpp>
-//#include <engine/graphics/Graphics.hpp>
+#include <engine/graphics/Graphics.hpp>
 #define VKASSERTLOG( token ){ auto res = token; if( res != VK_SUCCESS ){ OS::IO::debugLogln( #token , " has failed" ); } }
 #define VK_OBJECT( classname ) \
-private:\
-classname()=default;\
 public:\
+classname()=default;\
 classname( classname  const & ) = delete;\
 classname &operator=( classname  const & ) = delete;\
 classname( classname && ) = default;\
@@ -16,22 +15,36 @@ namespace VK
 {
 	using namespace Allocators;
 	using namespace Collections;
-	enum class ComponentSwizzle : uint
+	inline VkIndexType getVK( Graphics::IndexType type )
 	{
-		R = VK_COMPONENT_SWIZZLE_R ,
-		G = VK_COMPONENT_SWIZZLE_G ,
-		B = VK_COMPONENT_SWIZZLE_B ,
-		A = VK_COMPONENT_SWIZZLE_A ,
-		ONE = VK_COMPONENT_SWIZZLE_ONE
-	};
-	struct ComponentMapping
+		static VkIndexType _vk[] =
+		{
+			VK_INDEX_TYPE_UINT32 , VK_INDEX_TYPE_UINT16
+		};
+		return _vk[ ( uint )type ];
+	}
+	inline VkFilter getVK( Graphics::Filter type )
 	{
-		ComponentSwizzle swizzle[ 4 ];
-	};
-	struct ComponentType
+		static VkFilter _vk[] =
+		{
+			VK_FILTER_NEAREST , VK_FILTER_LINEAR
+		};
+		return _vk[ ( uint )type ];
+	}
+	inline VkSamplerAddressMode getVK( Graphics::WrapRegime type )
 	{
-
-	};
+		static VkSamplerAddressMode _vk[] =
+		{
+			VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER ,
+			VK_SAMPLER_ADDRESS_MODE_REPEAT ,
+			VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT
+		};
+		return _vk[ ( uint )type ];
+	}
+	inline uint getVK( Graphics::AttributeSlot slot )
+	{
+		return ( uint )slot;
+	}
 	/*enum class ImageAccessMask : uint
 	{
 		COLOR_ATTACHMENT , READ , WRITE
@@ -149,39 +162,53 @@ namespace VK
 		};
 		return _vk[ uint( c ) ];
 	}*/
-	
-	struct ImageMapingInfo
+	inline VkFormat getVK( Graphics::ComponentMapping mapping )
 	{
-		VkFormat format;
-		VkComponentMapping mapping;
-	};
-	/*inline ImageMapingInfo getVK( Graphics::PixelType pixel_type )
-	{
-#define R VK_COMPONENT_SWIZZLE_R
-#define G VK_COMPONENT_SWIZZLE_G
-#define B VK_COMPONENT_SWIZZLE_B
-#define A VK_COMPONENT_SWIZZLE_A
-#define ONE VK_COMPONENT_SWIZZLE_ONE
-		static ImageMapingInfo _vk[] =
+		switch( mapping.format )
 		{
-			{ VK_FORMAT_R32G32B32_SFLOAT , { R , G , B , ONE } } ,
-			{ VK_FORMAT_R32G32B32A32_SFLOAT ,{ R , G , B , A } } ,
-			{ VK_FORMAT_R32G32B32A32_SINT ,{ R , G , B , A } } ,
-			{ VK_FORMAT_R16G16B16A16_SINT ,{ R , G , B , A } } ,
-			{ VK_FORMAT_R16G16B16A16_UNORM ,{ R , G , B , A } } ,
-			{ VK_FORMAT_R5G5B5A1_UNORM_PACK16 ,{ R , G , B , A } } ,
-			{ VK_FORMAT_R8G8B8A8_UNORM ,{ R , G , B , A } } ,
-			{ VK_FORMAT_R32_SFLOAT ,{ R , R , R , R } } ,
-			{ VK_FORMAT_R8_UNORM ,{ R , R , R , R } } ,
-			{ VK_FORMAT_B8G8R8_UNORM ,{ R , G , B , ONE } } ,
-			{ VK_FORMAT_B8G8R8A8_UNORM ,{ R , G , B , A } } ,
-			{ VK_FORMAT_B5G5R5A1_UNORM_PACK16 ,{ R , G , B , A } } ,
+		case Graphics::ComponentFormat::RGB:
+			switch( mapping.type )
+			{
+			case Graphics::ComponentType::BYTE:
+				return VK_FORMAT_R8G8B8_UINT;
+			case Graphics::ComponentType::UNORM8:
+				return VK_FORMAT_R8G8B8_UNORM;
+			case Graphics::ComponentType::UNORM16:
+				return VK_FORMAT_R16G16B16_UNORM;
+			}
+		case Graphics::ComponentFormat::RGBA:
+			switch( mapping.type )
+			{
+			case Graphics::ComponentType::BYTE:
+				return VK_FORMAT_R8G8B8A8_UINT;
+			case Graphics::ComponentType::UNORM8:
+				return VK_FORMAT_R8G8B8A8_UNORM;
+			case Graphics::ComponentType::UNORM16:
+				return VK_FORMAT_R16G16B16A16_UNORM;
+			}
+		}
+		return VK_FORMAT_UNDEFINED;
+	}
+	inline VkComponentSwizzle getVK( Graphics::ComponentSwizzle swizzle )
+	{
+		static VkComponentSwizzle _vk[] =
+		{
+			VK_COMPONENT_SWIZZLE_R ,
+			VK_COMPONENT_SWIZZLE_G ,
+			VK_COMPONENT_SWIZZLE_B ,
+			VK_COMPONENT_SWIZZLE_A ,
+			VK_COMPONENT_SWIZZLE_ONE ,
+			VK_COMPONENT_SWIZZLE_ZERO
 		};
-#undef R
-#undef G
-#undef B
-#undef A
-#undef ONE
-		return _vk[ uint( pixel_type ) ];
-	}*/
+		return _vk[ uint( swizzle ) ];
+	}
+	inline VkComponentMapping getVK( Graphics::ComponentSwizzle swizzle[ 4 ] )
+	{
+		VkComponentMapping out;
+		out.r = getVK( swizzle[ 0 ] );
+		out.g = getVK( swizzle[ 1 ] );
+		out.b = getVK( swizzle[ 2 ] );
+		out.a = getVK( swizzle[ 3 ] );
+		return out;
+	}
 }

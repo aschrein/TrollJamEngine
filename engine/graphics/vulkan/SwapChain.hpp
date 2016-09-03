@@ -1,7 +1,9 @@
 #pragma once
 //#include <engine/graphics/vulkan/defines.hpp>
 //#include <engine/graphics/vulkan/Device.hpp>
+#include <engine/os/Window.hpp>
 #include <engine/graphics/vulkan/Images.hpp>
+#include <engine/graphics/vulkan/ObjectPool.hpp>
 namespace VK
 {
 	class SwapChain
@@ -19,8 +21,8 @@ namespace VK
 		} surface;
 		VkDevice dev_raw;
 		Unique< VkSwapchainKHR > handle;
-		LocalArray< Image , 10 > images;
-		LocalArray< ImageView , 10 > views;
+		//LocalArray< Attachment , 10 > attachments;
+		uint attachment_count;
 		uint32_t current_image = 0;
 		uint width , height;
 	public:
@@ -49,17 +51,17 @@ namespace VK
 		}
 		uint32_t getImagesCount() const
 		{
-			return images.size;
+			return attachment_count;
 		}
-		Image const &getCurrentImage() const
+		/*Attachment const &getCurrentAttachment() const
 		{
-			return images[ current_image ];
+			return attachments[ current_image ];
 		}
-		ImageView const &getCurrentImageView() const
+		Attachment const &getAttachment( uint i ) const
 		{
-			return views[ current_image ];
-		}
-		static SwapChain create( Instance const &instance , Device const &dev , uint images_count , OS::Window const &window )
+			return attachments[ i ];
+		}*/
+		static SwapChain create( Instance const &instance , Device const &dev , ObjectPool &pool , uint images_count , OS::Window const &window )
 		{
 			VkWin32SurfaceCreateInfoKHR surface_create_info;
 			Allocator::zero( &surface_create_info );
@@ -143,12 +145,16 @@ namespace VK
 				image.format = swap_chain_create_info.imageFormat;
 				image.layout = VK_IMAGE_LAYOUT_UNDEFINED;
 				image.dev_raw = dev.getHandle();
-				out.views.push( std::move( image.createView(
+				image.height = out.height;
+				image.width = out.width;
+				Attachment attachment;
+				attachment.view = std::move( image.createView(
 				{ VK_COMPONENT_SWIZZLE_R , VK_COMPONENT_SWIZZLE_G , VK_COMPONENT_SWIZZLE_B , VK_COMPONENT_SWIZZLE_A } ,
-				VK_IMAGE_ASPECT_COLOR_BIT
-				
-				) ) );
-				out.images.push( std::move( image ) );
+					VK_IMAGE_ASPECT_COLOR_BIT
+
+				) );
+				attachment.image = std::move( image );
+				pool.attachments.push( std::move( attachment ) );
 			}
 			return out;
 		}

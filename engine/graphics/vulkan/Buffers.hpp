@@ -10,7 +10,7 @@ namespace VK
 	private:
 		Unique< VkDeviceMemory > memory;
 		uint size = 0;
-		VkDevice dev_raw;
+		VkDevice dev_raw = VK_NULL_HANDLE;
 		RangeManager rm;
 	public:
 		static Memory create( Device const &device , uint size , uint type_index )
@@ -67,9 +67,9 @@ namespace VK
 	private:
 		Unique< VkBuffer > buffer;
 		Optional< MemoryContainer , Unique< VkDeviceMemory > > memory;
-		uint offset;
+		uint offset = 0;
 		uint size = 0;
-		VkDevice dev_raw;
+		VkDevice dev_raw = VK_NULL_HANDLE;
 	public:
 		static Buffer create(
 			Device const &device , VkBufferUsageFlags usage ,

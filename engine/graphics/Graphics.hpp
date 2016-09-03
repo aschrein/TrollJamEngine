@@ -2,9 +2,7 @@
 #include <engine/util/defines.hpp>
 #include <engine/math/vec.hpp>
 #include <engine/math/mat.hpp>
-#include <engine/os/Async.hpp>
 #include <engine/assets/Mesh.hpp>
-#include <engine/data_struct/Optional.hpp>
 #include <engine/mem/Pointers.hpp>
 #include <engine/data_struct/RingBuffer.hpp>
 namespace Graphics
@@ -97,17 +95,18 @@ namespace Graphics
 		Filter min_filter;
 		bool use_mipmap;
 		uint anisotropy_level;
-		WrapRegime x_regime;
-		WrapRegime y_regime;
-		WrapRegime z_regime;
+		WrapRegime u_regime;
+		WrapRegime v_regime;
+		WrapRegime w_regime;
 	};
 	struct RenderTargetInfo
 	{
-		RenderTargetType type;
 		ComponentMapping component_mapping;
-		bool sampled;
-		uint width;
-		uint height;
+		uint2 size;
+	};
+	struct DepthStencilTargetInfo
+	{
+		uint2 size;
 	};
 	struct TextureInfo
 	{
@@ -118,6 +117,29 @@ namespace Graphics
 	{
 		FILL , FILL_BACK , FILL_FRONT , WIRE
 	};
+	struct PointLightInfo
+	{
+		float3 position;
+		float3 color;
+		float linear_falloff;
+		float quadratic_falloff;
+		uint shadow_render_target;
+		bool cast_shadows;
+		uint mask_texture_view;
+		bool use_mask;
+	};
+	struct ConeLightInfo
+	{
+		float3 position;
+		float3 direction;
+		float3 color;
+		float linear_falloff;
+		float quadratic_falloff;
+		uint shadow_render_target;
+		bool cast_shadows;
+		uint mask_texture_view;
+		bool use_mask;
+	};
 	enum class MaterialType : uint
 	{
 		DEFAULT
@@ -125,13 +147,22 @@ namespace Graphics
 	struct Material
 	{
 		uint albedo_texture_view;
+		uint albedo_sampler;
 		uint normal_texture_view;
+		uint normal_sampler;
 		uint roughness_texture_view;
+		uint roughness_sampler;
 		uint metalness_texture_view;
+		uint metalness_sampler;
+		float3 albedo;
+		float3 normal;
+		float roughness;
+		float metalness;
 		MaterialType type;
-		bool has_albedo_texture;
-		bool has_normal_texture;
-		bool has_specular__texture;
+		bool use_albedo_texture;
+		bool use_normal_texture;
+		bool use_roughness__texture;
+		bool use_metalness__texture;
 	};
 	enum class PrimitiveType : uint
 	{
@@ -139,7 +170,7 @@ namespace Graphics
 	};
 	enum class IndexType : uint
 	{
-		UINT32 , UINT16 , UINT8
+		UINT32 , UINT16
 	};
 	enum class AttributeSlot : uint
 	{
@@ -147,64 +178,70 @@ namespace Graphics
 	};
 	struct DrawMeshInfo
 	{
-		uint *vertex_buffer_handle;
-		uint vertex_buffer_count;
+		LocalArray< uint , 10 > vertex_buffer_handles;
+		IndexType index_type;
 		uint index_buffer_handle;
-		uint index_layout_handle;
 		uint start_index;
 		uint count;
 		PrimitiveType primitive_type;
-		f4x4 transform;
-		qf *skeletal_transform;
-		uint bone_count;
-		Material *material;
+		Material material;
+		uint16_t distance_from_camera;
 	};
-	struct Attribute
+	struct AttributeInfo
 	{
 		AttributeSlot slot;
 		uint offset;
 		uint elem_count;
 		PlainFieldType src_type;
 		bool normalized;
-		uint stride;
 		uint buffer_index;
 	};
-	struct VertexLayoutInfo
+	enum class UniformSlot
 	{
-		Attribute *attributes;
-		uint attributes_count;
+		MODEL_TRANSFORM , SKELETAL_TRANSFORM
+	};
+	struct UniformInfo
+	{
+		UniformSlot slot;
+		uint offset;
+		uint size;
+		uint buffer_index;
+	};
+	struct UniformLayoutInfo
+	{
+		LocalArray< UniformInfo , 10 > uniforms;
+	};
+	enum class BufferTarget
+	{
+		VERTEX_BUFFER , INDEX_BUFFER , UNIFORM_BUFFER
 	};
 	struct BufferInfo
 	{
 		void *data;
 		uint size;
 		Usage usage;
+		BufferTarget target;
 	};
 	struct TextureViewInfo
 	{
 		uint texture_handler;
 		ComponentSwizzle swizzle[ 4 ];
+		uint layer;
+		uint mipmap_level;
 	};
 	class CommandBuffer
 	{
-		friend class CommandBufferPool;
-	private:
-		NONMOVABLE( CommandBuffer );
-	public:
+		void putPointLight( PointLightInfo const *info );
+		void putConeLight( ConeLightInfo const *info );
 		void drawIndexed( DrawMeshInfo const *info );
-		void fillBuffer( uint buf_handler , void const *data , uint size );
-		void fillImage( uint img_handler , uint layer , void const *data , uint size );
 		void fence();
 		void *allocate( uint size );
 	};
-	class CommandBufferPool
+	class CommandPool
 	{
-		friend class RenderingBackend;
-	private:
-		NONMOVABLE( CommandBufferPool );
-	public:
-		CommandBuffer *createCommandBuffer();
+		CommandBuffer *createCommandBuffer( uint pass_id );
 	};
+	class RenderingBackend;
 	class UniqueHandler
 	{
 	private:
@@ -248,6 +285,41 @@ namespace Graphics
 			release();
 		}
 	};
+	struct PointLightPass
+	{
+		uint frame_buffer_size;
+	};
+	enum class BlendType
+	{
+		ONE , SRC_ALPHA , ONE_MINUS_SRC_ALPHA , ZERO
+	};
+	enum class DepthTestType
+	{
+		LESS , EQUAL , LEQUAL , NONE
+	};
+	enum class FrontFace
+	{
+		CLOCKWISE , COUNTER_CLOCKWISE
+	};
+	struct PassInfo
+	{
+		LocalArray< uint , 10 > render_targets;
+		uint depth_stencil_target;
+		bool use_depth_stencil;
+		DepthTestType depth_test_type;
+		PrimitiveType primitive_type;
+		BlendType src_blend_type;
+		BlendType dst_blend_type;
+		bool use_blend;
+		bool wireframe;
+		float line_width;
+		bool cull_face;
+		FrontFace front_face;
+		uint4 viewport_rect;
+		uint vertex_layout;
+		LocalArray< AttributeInfo , 10 > vertex_attribute_layout;
+		LocalArray< uint , 10 > vertex_buffer_binding_strides;
+	};
 	class RenderingBackend
 	{
 		friend class Windows;
@@ -257,23 +329,25 @@ namespace Graphics
 		NONMOVABLE( RenderingBackend );
 		bool isReady();
 		void wait();
-		void render();
-		void pushCommand( CommandBufferPool *cmd );
-		uint getSwapBuffersCount() const;
-		CommandBufferPool createCommandPool();
+		Pointers::Unique< CommandPool > createCommandPool();
+		void render( Pointers::Unique< CommandPool > &&cmd_pool );
+		void fillBuffer( uint buf_handler , void const *data , uint size );
+		void fillImage( uint img_handler , uint layer , void const *data , uint size );
 
-		uint createVertexBuffer( BufferInfo const *info );
-		uint createIndexBuffer( BufferInfo const *info );
-		uint createVertexLayout( VertexLayoutInfo const *info );
-		uint createTexture( TextureInfo const *info );
-		uint createTextureView( TextureViewInfo const *info );
-		uint createRenderTarget( RenderTargetInfo const *info );
-		uint createSampler( SamplerInfo const *info );
+		uint createBuffer( BufferInfo info );
+		uint createTexture( TextureInfo info );
+		uint createTextureView( TextureViewInfo info );
+		uint createRenderTarget( RenderTargetInfo info );
+		uint createDepthStencilTarget( DepthStencilTargetInfo info );
+		uint createPass( PassInfo info );
+		uint createSampler( SamplerInfo info );
+
 		void freeVertexBuffer( uint hndl );
 		void freeIndexBuffer( uint hndl );
 		void freeTexture( uint hndl );
 		void freeTextureView( uint hndl );
-		void freeVertexLayout( uint hndl );
 		void freeSampler( uint hndl );
+		void freePass( uint hndl );
+		void freeRenderTarget( uint hndl );
 	};
 }

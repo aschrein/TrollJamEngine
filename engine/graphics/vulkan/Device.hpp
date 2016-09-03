@@ -57,6 +57,22 @@ namespace VK
 			out.create( *handle , shader_module_create_info );
 			return out;
 		}
+		Unique< VkSampler > createSampler( Graphics::SamplerInfo const &info )
+		{
+			VkSamplerCreateInfo sampler;
+			Allocator::zero( &sampler );
+			sampler.magFilter = getVK( info.mag_filter );
+			sampler.minFilter = getVK( info.min_filter );
+			sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			sampler.addressModeU = getVK( info.u_regime );
+			sampler.addressModeV = getVK( info.v_regime );
+			sampler.addressModeW = getVK( info.w_regime );
+			sampler.compareOp = VK_COMPARE_OP_NEVER;
+			sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+			Unique< VkSampler > out;
+			out.create( getHandle() , sampler );
+			return out;
+		}
 		VkQueue getGraphicsQueue( uint index = 0 ) const
 		{
 			VkQueue queue;
