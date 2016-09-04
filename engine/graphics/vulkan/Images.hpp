@@ -69,11 +69,6 @@ namespace VK
 			image_info.usage = usage_flags;
 			image_info.flags = 0;
 			image_info.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-			VkMemoryAllocateInfo mem_alloc = {};
-			mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			mem_alloc.pNext = NULL;
-			mem_alloc.allocationSize = 0;
-			mem_alloc.memoryTypeIndex = 0;
 
 			VkMemoryRequirements mem_req;
 			
@@ -98,7 +93,7 @@ namespace VK
 		{
 			return *handle;
 		}
-		ImageView createView( VkComponentMapping mapping , VkImageAspectFlags aspect_flags ) const
+		ImageView createView( VkComponentMapping mapping , VkImageSubresourceRange subresource_range ) const
 		{
 			VkImageViewCreateInfo image_view_info;
 			Allocator::zero( &image_view_info );
@@ -106,16 +101,7 @@ namespace VK
 			image_view_info.format = format;
 			image_view_info.components = mapping;
 			image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			{
-				VkImageSubresourceRange subresource_range;
-				VkImageAspectFlags aspect;
-				subresource_range.aspectMask = aspect_flags;
-				subresource_range.baseMipLevel = 0;
-				subresource_range.levelCount = mip_levels;
-				subresource_range.layerCount = layers;
-				subresource_range.baseArrayLayer = 0;
-				image_view_info.subresourceRange = subresource_range;
-			}
+			image_view_info.subresourceRange = subresource_range;
 			image_view_info.image = *handle;
 			ImageView image_view;
 			image_view.handle.create( dev_raw , image_view_info );
@@ -169,13 +155,13 @@ namespace VK
 			);
 			out.view = out.image.createView(
 			{ VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A } ,
-				VK_IMAGE_ASPECT_COLOR_BIT
+			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 }
 			);
 			VkSamplerCreateInfo sampler;
 			Allocator::zero( &sampler );
 			sampler.magFilter = VK_FILTER_NEAREST;
 			sampler.minFilter = VK_FILTER_NEAREST;
-			sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 			sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 			sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 			sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;

@@ -140,29 +140,15 @@ namespace Graphics
 		uint mask_texture_view;
 		bool use_mask;
 	};
-	enum class MaterialType : uint
+	enum class MaterialTextureTarget
 	{
-		DEFAULT
+		ALBEDO , NORMAL , METALNESS , ROUGHNESS
 	};
-	struct Material
+	struct MaterialTexture
 	{
-		uint albedo_texture_view;
-		uint albedo_sampler;
-		uint normal_texture_view;
-		uint normal_sampler;
-		uint roughness_texture_view;
-		uint roughness_sampler;
-		uint metalness_texture_view;
-		uint metalness_sampler;
-		float3 albedo;
-		float3 normal;
-		float roughness;
-		float metalness;
-		MaterialType type;
-		bool use_albedo_texture;
-		bool use_normal_texture;
-		bool use_roughness__texture;
-		bool use_metalness__texture;
+		uint texture_view;
+		uint sampler;
+		MaterialTextureTarget target;
 	};
 	enum class PrimitiveType : uint
 	{
@@ -179,12 +165,17 @@ namespace Graphics
 	struct DrawMeshInfo
 	{
 		LocalArray< uint , 10 > vertex_buffer_handles;
+		LocalArray< uint , 10 > vertex_buffer_offsets;
 		IndexType index_type;
 		uint index_buffer_handle;
+		uint index_buffer_offset;
 		uint start_index;
-		uint count;
+		uint index_count;
+		uint start_instance;
+		uint instance_count;
+		uint vertex_offset;
 		PrimitiveType primitive_type;
-		Material material;
+		LocalArray< MaterialTexture , 4 > material_textures;
 		uint16_t distance_from_camera;
 	};
 	struct AttributeInfo
@@ -195,6 +186,7 @@ namespace Graphics
 		PlainFieldType src_type;
 		bool normalized;
 		uint buffer_index;
+		bool per_instance;
 	};
 	enum class UniformSlot
 	{
@@ -206,10 +198,6 @@ namespace Graphics
 		uint offset;
 		uint size;
 		uint buffer_index;
-	};
-	struct UniformLayoutInfo
-	{
-		LocalArray< UniformInfo , 10 > uniforms;
 	};
 	enum class BufferTarget
 	{
@@ -226,14 +214,13 @@ namespace Graphics
 	{
 		uint texture_handler;
 		ComponentSwizzle swizzle[ 4 ];
-		uint layer;
-		uint mipmap_level;
 	};
 	class CommandBuffer
 	{
 		void putPointLight( PointLightInfo const *info );
 		void putConeLight( ConeLightInfo const *info );
 		void drawIndexed( DrawMeshInfo const *info );
+		void fillBuffer( uint buf_handler , void const *data , uint size );
 		void fence();
 		void *allocate( uint size );
 	};
@@ -301,6 +288,10 @@ namespace Graphics
 	{
 		CLOCKWISE , COUNTER_CLOCKWISE
 	};
+	struct MaterialInfo
+	{
+		LocalArray< uint , 10 >
+	};
 	struct PassInfo
 	{
 		LocalArray< uint , 10 > render_targets;
@@ -310,6 +301,7 @@ namespace Graphics
 		PrimitiveType primitive_type;
 		BlendType src_blend_type;
 		BlendType dst_blend_type;
+		uint material_handler;
 		bool use_blend;
 		bool wireframe;
 		float line_width;
@@ -319,6 +311,7 @@ namespace Graphics
 		uint vertex_layout;
 		LocalArray< AttributeInfo , 10 > vertex_attribute_layout;
 		LocalArray< uint , 10 > vertex_buffer_binding_strides;
+		LocalArray< UniformInfo , 10 > uniform_layout;
 	};
 	class RenderingBackend
 	{
@@ -331,8 +324,6 @@ namespace Graphics
 		void wait();
 		Pointers::Unique< CommandPool > createCommandPool();
 		void render( Pointers::Unique< CommandPool > &&cmd_pool );
-		void fillBuffer( uint buf_handler , void const *data , uint size );
-		void fillImage( uint img_handler , uint layer , void const *data , uint size );
 
 		uint createBuffer( BufferInfo info );
 		uint createTexture( TextureInfo info );

@@ -63,7 +63,7 @@ namespace VK
 			Allocator::zero( &sampler );
 			sampler.magFilter = getVK( info.mag_filter );
 			sampler.minFilter = getVK( info.min_filter );
-			sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			sampler.mipmapMode = info.use_mipmap ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
 			sampler.addressModeU = getVK( info.u_regime );
 			sampler.addressModeV = getVK( info.v_regime );
 			sampler.addressModeW = getVK( info.w_regime );

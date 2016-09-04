@@ -17,18 +17,21 @@ namespace VK
 		Unique< VkPipelineLayout > pipeline_layout;
 		Unique< VkDescriptorSetLayout > desc_set_layout;
 		Unique< VkFramebuffer > frame_buffer;
+		LocalArray< uint , 10 > attachment_indices;
 	public:
 		static Pass create( Device const &device , ObjectPool const &pool , Graphics::PassInfo const &info )
 		{
 			LocalArray< VkAttachmentDescription , 10 > attachments_desc;
 			LocalArray< VkAttachmentReference , 10 > attachments_ref;
 			LocalArray< VkImageView , 10 > attachments_views;
+			Pass out;
 			ito( info.render_targets.size )
 			{
-				auto const &attachments = pool.attachments[ info.render_targets[ i ] ];
+				auto const &attachment = pool.attachments[ info.render_targets[ i ] ];
+				out.attachment_indices.push( info.render_targets[ i ] );
 				VkAttachmentDescription attachment_desc;
 				Allocator::zero( &attachment_desc );
-				attachment_desc.format = attachments.getView().getFormat();
+				attachment_desc.format = attachment.getView().getFormat();
 				attachment_desc.samples = VK_SAMPLE_COUNT_1_BIT;
 				attachment_desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 				attachment_desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -42,8 +45,9 @@ namespace VK
 				attachment_reference.attachment = i;
 				attachment_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 				attachments_ref.push( attachment_reference );
-				attachments_views.push( attachments.getView().getHandle() );
+				attachments_views.push( attachment.getView().getHandle() );
 			}
+			VkSubpassDescription subpass_desc;
 			if( info.use_depth_stencil )
 			{
 				auto const &view = pool.attachments[ info.depth_stencil_target ];
@@ -58,14 +62,14 @@ namespace VK
 				attachment_desc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 				attachment_desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 				attachments_desc.push( attachment_desc );
+				attachments_views.push( view.getView().getHandle() );
 				VkAttachmentReference attachment_reference;
 				Allocator::zero( &attachment_reference );
 				attachment_reference.attachment = attachments_desc.size - 1;
-				attachment_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-				attachments_ref.push( attachment_reference );
-				attachments_views.push( view.getView().getHandle() );
+				attachment_reference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+				subpass_desc.pDepthStencilAttachment = &attachment_reference;
 			}
-			VkSubpassDescription subpass_desc;
+			
 			Allocator::zero( &subpass_desc );
 			subpass_desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 			subpass_desc.colorAttachmentCount = attachments_ref.size;
@@ -77,32 +81,59 @@ namespace VK
 			render_pass_info.pAttachments = &attachments_desc[ 0 ];
 			render_pass_info.subpassCount = 1;
 			render_pass_info.pSubpasses = &subpass_desc;
-			Pass out;
+			
 			out.render_pass.create( device.getHandle() , render_pass_info );
-			VkDescriptorSetLayoutBinding bindongs[] =
+
+			VkFramebufferCreateInfo frame_buffer_create_info;
+			Allocator::zero( &frame_buffer_create_info );
+			frame_buffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			frame_buffer_create_info.renderPass = *out.render_pass;
+			frame_buffer_create_info.attachmentCount = attachments_views.size;
+			frame_buffer_create_info.pAttachments = &attachments_views[ 0 ];
+			frame_buffer_create_info.width = pool.attachments[ info.render_targets[ 0 ] ].getImage().getSize().x;
+			frame_buffer_create_info.height = pool.attachments[ info.render_targets[ 0 ] ].getImage().getSize().y;
+			frame_buffer_create_info.layers = 1;
+			out.frame_buffer.create( device.getHandle() , frame_buffer_create_info );
+
+			LocalArray< VkDescriptorSetLayoutBinding , 10 > layout_bindings;
+
+			/*VkDescriptorSetLayoutBinding bindongs[] =
 			{
-				0 ,
-				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ,
-				1 ,
-				VK_SHADER_STAGE_ALL ,
-				NULL
-			};
+				{
+					0 ,
+					VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ,
+					1 ,
+					VK_SHADER_STAGE_ALL ,
+					NULL
+				} ,
+				{
+					1 ,
+					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ,
+					1 ,
+					VK_SHADER_STAGE_ALL ,
+					NULL
+				}
+			};*/
 			VkDescriptorSetLayoutCreateInfo desc_set_layout_info;
 			Allocator::zero( &desc_set_layout_info );
-			desc_set_layout_info.bindingCount = 1;
-			desc_set_layout_info.pBindings = bindongs;
+			desc_set_layout_info.bindingCount = layout_bindings.size;
+			desc_set_layout_info.pBindings = &layout_bindings[ 0 ];
 			desc_set_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 
 			out.desc_set_layout.create( device.getHandle() , desc_set_layout_info );
 
-			VkDescriptorPoolSize type_counts[ 1 ];
+			LocalArray< VkDescriptorPoolSize , 10 > type_counts;
+			/*VkDescriptorPoolSize type_counts[ 2 ];
 			type_counts[ 0 ].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			type_counts[ 0 ].descriptorCount = 1;
+			type_counts[ 1 ].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			type_counts[ 1 ].descriptorCount = 1;*/
 			VkDescriptorPoolCreateInfo desc_pool_info;
 			Allocator::zero( &desc_pool_info );
 			desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			desc_pool_info.poolSizeCount = 1;
-			desc_pool_info.pPoolSizes = type_counts;
+			desc_pool_info.poolSizeCount = type_counts.size;
+			desc_pool_info.pPoolSizes = &type_counts[ 0 ];
+			desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 			desc_pool_info.maxSets = 1;
 			out.desc_pool.create( device.getHandle() , desc_pool_info );
 
@@ -112,6 +143,8 @@ namespace VK
 			desc_set_info.descriptorSetCount = 1;
 			desc_set_info.pSetLayouts = &out.desc_set_layout;
 			out.desc_set.create( device.getHandle() , *out.desc_pool , desc_set_info );
+
+
 			VkPipelineShaderStageCreateInfo infos[] =
 			{
 				{
@@ -253,21 +286,20 @@ cont:
 			pipeline_create_info.renderPass = *out.render_pass;
 			pipeline_create_info.basePipelineIndex = -1;
 			out.pipeline.create( device.getHandle() , pipeline_create_info );
-			VkFramebufferCreateInfo frame_buffer_create_info;
-			Allocator::zero( &frame_buffer_create_info );
-			frame_buffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			frame_buffer_create_info.renderPass = *out.render_pass;
-			frame_buffer_create_info.attachmentCount = attachments_views.size;
-			frame_buffer_create_info.pAttachments = &attachments_views[ 0 ];
-			frame_buffer_create_info.width = pool.attachments[ info.render_targets[ 0 ] ].getImage().getSize().x;
-			frame_buffer_create_info.height = pool.attachments[ info.render_targets[ 0 ] ].getImage().getSize().y;
-			frame_buffer_create_info.layers = 1;
-			out.frame_buffer.create( device.getHandle() , frame_buffer_create_info );
+			
 			return out;
 		}
 		VkRenderPass const &getPass() const
 		{
 			return *render_pass;
+		}
+		uint getAttachmentCount() const
+		{
+			return attachment_indices.size;
+		}
+		uint getAttachmentIndex( uint i ) const
+		{
+			return attachment_indices[ i ];
 		}
 		VkPipeline const &getPipeline() const
 		{

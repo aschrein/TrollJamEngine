@@ -150,8 +150,7 @@ namespace VK
 				Attachment attachment;
 				attachment.view = std::move( image.createView(
 				{ VK_COMPONENT_SWIZZLE_R , VK_COMPONENT_SWIZZLE_G , VK_COMPONENT_SWIZZLE_B , VK_COMPONENT_SWIZZLE_A } ,
-					VK_IMAGE_ASPECT_COLOR_BIT
-
+				{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 }
 				) );
 				attachment.image = std::move( image );
 				pool.attachments.push( std::move( attachment ) );

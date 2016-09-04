@@ -8,6 +8,7 @@
 #include <engine/graphics/vulkan/Queue.hpp>
 #include <engine/graphics/vulkan/CommandBuffer.hpp>
 #include <engine/graphics/vulkan/ObjectPool.hpp>
+#include <engine/graphics/vulkan/Pass.hpp>
 #include <engine/os/Window.hpp>
 namespace VKInterface
 {
@@ -62,13 +63,14 @@ namespace VKInterface
 		VK::Instance instance;
 		VK::SwapChain swap_chain;
 		VK::Memory dev_mem;
+		VK::Memory dev_texture_mem;
 		VK::Memory host_mem;
 		VK::CommandPool cmd_pool;
 		VK::CommandBuffer cmd_buf;
 		VK::Queue graphics_queue;
 		VK::ObjectPool object_pool;
 		Pointers::Unique< Graphics::CommandPool > current_command_pool = nullptr;
-
+		LocalArray< VK::Pass , 1000 > passes;
 		//RingBuffer< CommandBufferPool* , 20 > command_queue;
 		RingBuffer< CreationDesc , 1000 > creation_queue;
 		void mainloop();

@@ -90,7 +90,7 @@ namespace Math
 				w * a.w - x * a.x - y * a.y - z * a.z ,
 				x * a.w + w * a.x + y * a.z - z * a.y ,
 				y * a.w + w * a.y - x * a.z + z * a.x ,
-				z * a.w + w * a.z + x * a.y - y * a.x ,
+				z * a.w + w * a.z + x * a.y - y * a.x
 				);
 		}
 		CALLMOD Quaternion &operator*=( Quaternion const &a )

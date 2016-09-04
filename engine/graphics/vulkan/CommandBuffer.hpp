@@ -3,6 +3,7 @@
 #include <engine/graphics/vulkan/Images.hpp>
 #include <engine/graphics/vulkan/Device.hpp>
 #include <engine/graphics/vulkan/Buffers.hpp>
+#include <engine/graphics/vulkan/Pass.hpp>
 #include <engine/math/vec.hpp>
 namespace VK
 {
@@ -53,12 +54,58 @@ namespace VK
 			vkCmdPipelineBarrier( *handle , VK_PIPELINE_STAGE_ALL_COMMANDS_BIT , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT ,
 				0 , 0 , nullptr , 0 , nullptr , 1 , &barrier );
 		}
-		void copy( Buffer const &dst , Buffer const &src , uint size )
+		void copy( Buffer const &dst , Buffer const &src , uint size ) const
 		{
 			VkBufferCopy copy;
 			Allocator::zero( &copy );
 			copy.size = size;
 			vkCmdCopyBuffer( *handle , src.getHandle() , dst.getHandle() , 1 , &copy );
+		}
+		void copy( Image const &dst , Buffer const &src , VkBufferImageCopy const *ranges , uint range_count ) const
+		{
+			vkCmdCopyBufferToImage(
+				*handle ,
+				src.getHandle() ,
+				dst.getHandle() ,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL ,
+				range_count ,
+				ranges
+			);
+		}
+		void beginPass( Pass const &pass , uint4 render_area , VkClearValue const *clear_color ) const
+		{
+			VkRenderPassBeginInfo render_pass_begin_info;
+			Allocator::zero( &render_pass_begin_info );
+			render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+			render_pass_begin_info.renderPass = pass.getPass();
+			render_pass_begin_info.framebuffer = pass.getFrameBuffer();
+			render_pass_begin_info.renderArea =
+			{
+				{ render_area.x , render_area.y } ,
+				{ render_area.z , render_area.w }
+			};
+			render_pass_begin_info.clearValueCount = pass.getAttachmentCount();
+			render_pass_begin_info.pClearValues = clear_color;
+			vkCmdBeginRenderPass( getHandle() , &render_pass_begin_info , VK_SUBPASS_CONTENTS_INLINE );
+			vkCmdBindPipeline( getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pass.getPipeline() );
+			vkCmdBindDescriptorSets( getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pass.getPipelineLayout() , 0 , 1 , &pass.getDescriptorSet() , 0 , NULL );
+		}
+		void blit( Image const &dst , Image const &src , VkImageBlit const *blits , uint blit_count , VkFilter filter ) const
+		{
+			vkCmdBlitImage(
+				getHandle() ,
+				src.getHandle() ,
+				src.getLayout() ,
+				dst.getHandle() ,
+				dst.getLayout() ,
+				blit_count ,
+				blits ,
+				filter
+			);
+		}
+		void endPass() const
+		{
+			vkCmdEndRenderPass( getHandle() );
 		}
 		void end() const
 		{

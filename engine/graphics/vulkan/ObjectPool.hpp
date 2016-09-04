@@ -10,8 +10,8 @@ namespace VK
 	{
 	public:
 		Allocator *allocator;
-		Array< Image > images;
-		uint image_counter = 0;
+		Array< Image > textures;
+		uint texture_counter = 0;
 		Array< ImageView > views;
 		uint view_counter = 0;
 		Array< Buffer > buffers;
@@ -19,5 +19,7 @@ namespace VK
 		Array< Attachment > attachments;
 		uint attachment_counter = 0;
 		Array< Unique< VkShaderModule > > shader_modules;
+		Array< Unique< VkSampler > > samplers;
+		uint sampler_counter = 0;
 	};
 }
