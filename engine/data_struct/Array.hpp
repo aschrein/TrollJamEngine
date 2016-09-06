@@ -47,11 +47,12 @@ namespace Collections
 			if( data )
 			{
 				auto tmp = ( T* )allocator->alloc( size * sizeof( T ) );
-				allocator->copy( tmp , data , size * sizeof( T ) );
-				/*ito( size )
+				//Allocator::copy( tmp , data , size * sizeof( T ) );
+				ito( size )
 				{
-					tmp[ i ] = data[ i ];
-				}*/
+					new( tmp + i ) T();
+					tmp[ i ] = std::move( data[ i ] );
+				}
 				this->allocator->free( data );
 				data = tmp;
 				real_size = size;

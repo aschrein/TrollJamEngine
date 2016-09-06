@@ -35,4 +35,5 @@ namespace OS
 		~Window();
 		void run();
 	};
+	void exec( String command );
 }

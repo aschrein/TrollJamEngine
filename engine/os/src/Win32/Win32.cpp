@@ -1,9 +1,5 @@
 #include <stdafx.h>
 #include <engine/os/Input.hpp>
-#include <engine/graphics/ogl/oglinclude.hpp>
-
-#include <engine/graphics/Graphics.hpp>
-
 #include <engine/os/Window.hpp>
 using namespace OS::InputState;
 using namespace OS;
@@ -35,6 +31,17 @@ namespace OS
 				return Options::Result< FileImage >();
 			}
 		}
+		void save( String filename , void const *data , uint length )
+		{
+			FILE *file = NULL;
+			fopen_s( &file , filename.getChars() , "wb" );
+			fwrite( data , 1 , length , file );
+			fclose( file );
+		}
+	}
+	void exec( String command )
+	{
+		system( command.getChars() );
 	}
 }
 

@@ -5,114 +5,15 @@
 #include <engine/assets/Mesh.hpp>
 #include <engine/mem/Pointers.hpp>
 #include <engine/data_struct/RingBuffer.hpp>
+#include <engine/graphics/Shader.hpp>
+#include <engine/graphics/Buffers.hpp>
+#include <engine/graphics/Shader.hpp>
+#include <engine/graphics/Textures.h>
 namespace Graphics
 {
 	using namespace Assets::Mesh;
-	using namespace OS::Async;
 	using namespace Math;
-	using namespace Options;
-	using namespace Pointers;
-	using namespace LockFree;
-	enum class Usage
-	{
-		STATIC , DYNAMIC
-	};
-	enum class ComponentType : uint
-	{
-		FLOAT32 , INT , SHORT , BYTE , UNORM8 , UNORM16 , FIVE
-	};
-	enum class ComponentFormat
-	{
-		RGB , RGBA , BGR , BGRA , R
-	};
-	enum class ComponentSwizzle : uint
-	{
-		R , G , B , A , ONE , ZERO
-	};
-	enum class RenderTargetType
-	{
-		COLOR , DEPTH , DEPTH_STENCIL
-	};
-	enum class DepthFormat
-	{
-		DEPTH32_UINT
-	};
-	//default is RGBA
-	struct ComponentMapping
-	{
-		ComponentFormat format;
-		ComponentType type = ComponentType::BYTE;
-	};
-	enum class ImageCompression
-	{
-		NONE
-	};
-	static uint getBpp( ComponentMapping mapping )
-	{
-		bool used[ 4 ] = { false };
-		if( mapping.type == ComponentType::FIVE )
-		{
-			return 2;
-		}
-		static uint _sizes[] =
-		{
-			4 , 4 , 2 , 1 , 1 , 2
-		};
-		static uint _comp[] =
-		{
-			3 , 4 , 3 , 4 , 1
-		};
-		return _comp[ ( uint )mapping.format ] * _sizes[ ( uint )mapping.type ];
-	}
-	//strict linear layout and power of two size
-	struct BitMap2D
-	{
-		void const *data;
-		uint size;
-		uint width;
-		uint height;
-		uint depth = 1;
-		uint layers_count = 1;
-		uint mipmaps_count = 1;
-		ImageCompression compression = ImageCompression::NONE;
-		ComponentMapping component_mapping;
-		uint getBpp() const
-		{
-			return Graphics::getBpp( component_mapping );
-		}
-	};
-	enum class Filter : int
-	{
-		NEAREST , LINEAR
-	};
-	enum class WrapRegime
-	{
-		CLAMP , REPEAT , MIRROR
-	};
-	struct SamplerInfo
-	{
-		Filter mag_filter;
-		Filter min_filter;
-		bool use_mipmap;
-		uint anisotropy_level;
-		WrapRegime u_regime;
-		WrapRegime v_regime;
-		WrapRegime w_regime;
-	};
-	struct RenderTargetInfo
-	{
-		ComponentMapping component_mapping;
-		uint2 size;
-	};
-	struct DepthStencilTargetInfo
-	{
-		uint2 size;
-	};
-	struct TextureInfo
-	{
-		BitMap2D bitmap;
-		Usage usage;
-	};
+	
 	enum class FillType : uint
 	{
 		FILL , FILL_BACK , FILL_FRONT , WIRE
@@ -140,80 +41,24 @@ namespace Graphics
 		uint mask_texture_view;
 		bool use_mask;
 	};
-	enum class MaterialTextureTarget
-	{
-		ALBEDO , NORMAL , METALNESS , ROUGHNESS
-	};
-	struct MaterialTexture
-	{
-		uint texture_view;
-		uint sampler;
-		MaterialTextureTarget target;
-	};
 	enum class PrimitiveType : uint
 	{
 		TRIANGLES , LINES , PATCHES , QUADS , POINTS
 	};
-	enum class IndexType : uint
-	{
-		UINT32 , UINT16
-	};
-	enum class AttributeSlot : uint
-	{
-		POSITION , NORMAL , TANGENT , BINORMAL , TEXCOORD , BONEINDICES , BONEWEIGHTS
-	};
 	struct DrawMeshInfo
 	{
-		LocalArray< uint , 10 > vertex_buffer_handles;
-		LocalArray< uint , 10 > vertex_buffer_offsets;
+		LocalArray< BufferRef , 10 > vertex_buffers;
+		LocalArray< BufferRef , 10 > uniform_buffers;
 		IndexType index_type;
-		uint index_buffer_handle;
-		uint index_buffer_offset;
+		BufferRef index_buffer;
 		uint start_index;
 		uint index_count;
 		uint start_instance;
 		uint instance_count;
 		uint vertex_offset;
 		PrimitiveType primitive_type;
-		LocalArray< MaterialTexture , 4 > material_textures;
-		uint16_t distance_from_camera;
-	};
-	struct AttributeInfo
-	{
-		AttributeSlot slot;
-		uint offset;
-		uint elem_count;
-		PlainFieldType src_type;
-		bool normalized;
-		uint buffer_index;
-		bool per_instance;
-	};
-	enum class UniformSlot
-	{
-		MODEL_TRANSFORM , SKELETAL_TRANSFORM
-	};
-	struct UniformInfo
-	{
-		UniformSlot slot;
-		uint offset;
-		uint size;
-		uint buffer_index;
-	};
-	enum class BufferTarget
-	{
-		VERTEX_BUFFER , INDEX_BUFFER , UNIFORM_BUFFER
-	};
-	struct BufferInfo
-	{
-		void *data;
-		uint size;
-		Usage usage;
-		BufferTarget target;
-	};
-	struct TextureViewInfo
-	{
-		uint texture_handler;
-		ComponentSwizzle swizzle[ 4 ];
+		LocalArray< TextureRef , 4 > material_textures;
+		float normalized_distance_from_camera;
 	};
 	class CommandBuffer
 	{
@@ -288,10 +133,6 @@ namespace Graphics
 	{
 		CLOCKWISE , COUNTER_CLOCKWISE
 	};
-	struct MaterialInfo
-	{
-		LocalArray< uint , 10 >
-	};
 	struct PassInfo
 	{
 		LocalArray< uint , 10 > render_targets;
@@ -301,7 +142,7 @@ namespace Graphics
 		PrimitiveType primitive_type;
 		BlendType src_blend_type;
 		BlendType dst_blend_type;
-		uint material_handler;
+		uint shader_handler;
 		bool use_blend;
 		bool wireframe;
 		float line_width;
@@ -332,6 +173,7 @@ namespace Graphics
 		uint createDepthStencilTarget( DepthStencilTargetInfo info );
 		uint createPass( PassInfo info );
 		uint createSampler( SamplerInfo info );
+		uint createSader( Shader info );
 
 		void freeVertexBuffer( uint hndl );
 		void freeIndexBuffer( uint hndl );

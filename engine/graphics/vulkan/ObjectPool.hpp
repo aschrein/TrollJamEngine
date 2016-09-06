@@ -3,6 +3,7 @@
 #include <engine/graphics/vulkan/Images.hpp>
 #include <engine/graphics/vulkan/Device.hpp>
 #include <engine/graphics/vulkan/Buffers.hpp>
+#include <engine/graphics/vulkan/Shader.hpp>
 namespace VK
 {
 	using namespace Collections;
@@ -18,8 +19,9 @@ namespace VK
 		uint buffer_counter = 0;
 		Array< Attachment > attachments;
 		uint attachment_counter = 0;
-		Array< Unique< VkShaderModule > > shader_modules;
 		Array< Unique< VkSampler > > samplers;
 		uint sampler_counter = 0;
+		Array< Shader > shaders;
+		uint shader_counter = 0;
 	};
 }

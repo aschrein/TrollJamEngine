@@ -106,7 +106,17 @@ namespace Collections
 		sprintf_s( mem , 100 , "%i" , val );
 	}
 	template<>
+	void StringUtil::stringify< uint >( char *mem , uint const &val )
+	{
+		sprintf_s( mem , 100 , "%i" , val );
+	}
+	template<>
 	void StringUtil::stringify< float >( char *mem , float const &val )
+	{
+		sprintf_s( mem , 100 , "%f" , val );
+	}
+	template<>
+	void StringUtil::stringify< double >( char *mem , double const &val )
 	{
 		sprintf_s( mem , 100 , "%f" , val );
 	}

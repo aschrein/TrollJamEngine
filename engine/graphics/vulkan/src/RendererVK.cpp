@@ -16,14 +16,14 @@ void drawIndexedDispatch( VKInterface::RenderingBackend *backend , void const *d
 	Graphics::DrawMeshInfo const *info = ( Graphics::DrawMeshInfo const * )data;
 	LocalArray< VkBuffer , 10 > buffers;
 	LocalArray< VkDeviceSize , 10 > offsets;
-	ito( info->vertex_buffer_handles.size )
+	ito( info->vertex_buffers.size )
 	{
-		auto &buffer = backend->object_pool.buffers[ info->vertex_buffer_handles[ i ] ];
+		auto &buffer = backend->object_pool.buffers[ info->vertex_buffers[ i ].handler ];
 		buffers.push( buffer.getHandle() );
-		offsets.push( info->vertex_buffer_offsets[ i ] );
+		offsets.push( info->vertex_buffers[ i ].offset );
 	}
 	vkCmdBindVertexBuffers( backend->cmd_buf.getHandle() , 0 , buffers.size , &buffers[ 0 ] , &offsets[ 0 ] );
-	vkCmdBindIndexBuffer( backend->cmd_buf.getHandle() , backend->object_pool.buffers[ info->index_buffer_handle ].getHandle() , info->index_buffer_offset , VK::getVK( info->index_type ) );
+	vkCmdBindIndexBuffer( backend->cmd_buf.getHandle() , backend->object_pool.buffers[ info->index_buffer.handler ].getHandle() , info->index_buffer.offset , VK::getVK( info->index_type ) );
 	vkCmdDrawIndexed( backend->cmd_buf.getHandle() , info->index_count , info->instance_count , info->start_index , info->vertex_offset, info->start_instance );
 }
 namespace Graphics
@@ -122,9 +122,23 @@ namespace Graphics
 	{
 
 	}
+	void createShaderDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
+	{
+		auto *descp = ( Shader* )data;
+	}
 	Pointers::Unique< CommandPool > RenderingBackend::createCommandPool()
 	{
 		return new VKInterface::CommandPool();
+	}
+	uint RenderingBackend::createSader( Shader info )
+	{
+		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
+		auto *descp = thisgl->allocator->alloc< Shader >();
+		new( descp ) Shader( thisgl->allocator );
+		*descp = info;
+		auto new_handler = thisgl->object_pool.shader_counter++;
+		thisgl->creation_queue.push( { descp , createShaderDispatch , new_handler } );
+		return new_handler;
 	}
 	uint RenderingBackend::createBuffer( BufferInfo desc )
 	{
@@ -398,7 +412,7 @@ namespace VKInterface
 			{ -2.0f , 2.0f , 2.0f } ,
 			{ 0.0f , 0.0f , 0.0f } ,
 			{ 0.0f , 0.0f , -1.0f } ,
-				0.01f , 1000.0f , 1.0f , 1.0f
+			0.01f , 1000.0f , 1.0f , 1.0f
 			);
 			float sbuffer[ 32 ];
 			Allocator::copy< float >( sbuffer , rot.__data , 4 );

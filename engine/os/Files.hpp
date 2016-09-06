@@ -105,5 +105,6 @@ namespace OS
 			}
 		};
 		Options::Result< FileImage > load( String filename , Allocator *allocator = Allocator::singleton );
+		void save( String filename , void const *data , uint length );
 	}
 }

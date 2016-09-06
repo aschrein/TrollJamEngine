@@ -175,7 +175,7 @@ namespace VK
 				VkVertexInputBindingDescription bind_info;
 				Allocator::zero( &bind_info );
 				bind_info.binding = i;
-				bind_info.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+				bind_info.inputRate = info.vertex_attribute_layout[ i ].per_instance ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
 				bind_info.stride = info.vertex_buffer_binding_strides[ i ];
 				in_bind_info.push( bind_info );
 			}

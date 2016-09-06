@@ -19,6 +19,10 @@ namespace Collections
 	private:
 		Array< char > chars;
 	public:
+		void setAllocator( Allocator *allocator )
+		{
+			chars.setAllocator( allocator );
+		}
 		String( Allocator *allocator )
 		{
 			chars.setAllocator( allocator );
@@ -43,6 +47,13 @@ namespace Collections
 		{
 			*this = cstring;
 			chars.resetCopyOnWrite();
+		}
+		char pop()
+		{
+			chars.pop();
+			char p = chars.pop();
+			chars.push( '\0' );
+			return p;
 		}
 		template< typename T >
 		String( T const &val )

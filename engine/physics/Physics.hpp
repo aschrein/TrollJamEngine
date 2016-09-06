@@ -72,7 +72,7 @@ namespace Physics
 	struct PhysicsShape
 	{
 		PhysycsShapeType type;
-		union
+		/*union
 		{
 			AABB aabb;
 			Sphere sphere;
@@ -83,10 +83,14 @@ namespace Physics
 			OBB obb;
 			ConvexMesh convex_mesh;
 		};
-		~PhysicsShape()
+		PhysicsShape()
 		{
 
 		}
+		~PhysicsShape()
+		{
+
+		}*/
 	};
 	struct Collision
 	{
