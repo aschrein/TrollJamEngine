@@ -31,7 +31,7 @@ namespace Graphics
 	void CommandBuffer::drawIndexed( DrawMeshInfo const *info )
 	{
 		VKInterface::CommandBuffer* thisvk = ( VKInterface::CommandBuffer* )this;
-		thisvk->draw_calls.push( VKInterface::DrawCallInfo{ info , drawIndexedDispatch , info->distance_from_camera } );
+		thisvk->draw_calls.push( VKInterface::DrawCallInfo{ info , drawIndexedDispatch , uint( info->normalized_distance_from_camera * 0xffff ) } );
 	}
 	void *CommandBuffer::allocate( uint size )
 	{
@@ -42,14 +42,13 @@ namespace Graphics
 		}
 		return thisvk->linear_allocator->alloc( size );
 	}
-	CommandBuffer *CommandPool::createCommandBuffer( uint pass_id )
+	CommandBuffer *CommandPool::createCommandBuffer()
 	{
 		VKInterface::CommandPool* thisvk = ( VKInterface::CommandPool* )this;
 		thisvk->buffers_per_pass.size++;
-		thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ].key = pass_id;
-		thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ].value.allocator = thisvk->allocator;
-		thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ].value.draw_calls.setAllocator( thisvk->allocator );
-		return ( CommandBuffer * )&thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ].value;
+		thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ].allocator = thisvk->allocator;
+		thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ].draw_calls.setAllocator( thisvk->allocator );
+		return ( CommandBuffer * )&thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ];
 	}
 	void createBufferDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
 	{
@@ -124,17 +123,22 @@ namespace Graphics
 	}
 	void createShaderDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
 	{
-		auto *descp = ( Shader* )data;
+		auto descp = *( ShaderInfo* )data;
+		backend->object_pool.shaders.push( std::move( VK::Shader::create( backend->device , descp ) ) );
+		descp.~ShaderInfo();
 	}
-	Pointers::Unique< CommandPool > RenderingBackend::createCommandPool()
+	CommandPool *RenderingBackend::createCommandPool( uint pass_handler )
 	{
-		return new VKInterface::CommandPool();
+		auto out = new VKInterface::CommandPool();
+		out->pass_handler = pass_handler;
+		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
+		return out;
 	}
-	uint RenderingBackend::createSader( Shader info )
+	uint RenderingBackend::createShader( ShaderInfo info )
 	{
 		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
-		auto *descp = thisgl->allocator->alloc< Shader >();
-		new( descp ) Shader( thisgl->allocator );
+		auto *descp = thisgl->allocator->alloc< ShaderInfo >();
+		new( descp ) ShaderInfo();
 		*descp = info;
 		auto new_handler = thisgl->object_pool.shader_counter++;
 		thisgl->creation_queue.push( { descp , createShaderDispatch , new_handler } );
@@ -149,6 +153,7 @@ namespace Graphics
 		if( desc.data )
 		{
 			VK::Buffer *tmp_buffer = thisgl->allocator->alloc< VK::Buffer >();
+			new( tmp_buffer ) VK::Buffer();
 			*tmp_buffer = VK::Buffer::create( thisgl->device , VK_BUFFER_USAGE_TRANSFER_SRC_BIT , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT , desc.size , desc.data );
 			descp->data = tmp_buffer;
 		}
@@ -179,11 +184,11 @@ namespace Graphics
 	}
 	uint RenderingBackend::createRenderTarget( RenderTargetInfo info )
 	{
-
+		return 0;
 	}
 	uint RenderingBackend::createDepthStencilTarget( DepthStencilTargetInfo info )
 	{
-
+		return 0;
 	}
 	uint RenderingBackend::createPass( PassInfo info )
 	{
@@ -217,10 +222,10 @@ namespace Graphics
 		}
 		thisgl->ready_signal.reset();
 	}
-	void RenderingBackend::render( Pointers::Unique< CommandPool > &&cmd_pool )
+	void RenderingBackend::render( CommandPool *cmd_pool )
 	{
 		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
-		thisgl->current_command_pool = std::move( cmd_pool );
+		thisgl->current_command_pool = ( VKInterface::CommandPool* ) cmd_pool;
 		thisgl->render_signal.signal();
 	}
 }
@@ -244,6 +249,7 @@ namespace OS
 			rvk->mainloop();
 		} , Allocator::singleton
 		);
+		rvk->wait();
 		return rvk;
 	}
 }
@@ -280,8 +286,8 @@ namespace VKInterface
 				files--;
 			}
 		}
-		object_pool.shader_modules.push( device.createShaderModule( vert_file->getView().getRaw() , vert_file->getView().getLimit() ) );
-		object_pool.shader_modules.push( device.createShaderModule( frag_file->getView().getRaw() , frag_file->getView().getLimit() ) );
+		//object_pool.shader_modules.push( device.createShaderModule( vert_file->getView().getRaw() , vert_file->getView().getLimit() ) );
+		//object_pool.shader_modules.push( device.createShaderModule( frag_file->getView().getRaw() , frag_file->getView().getLimit() ) );
 		cmd_pool = VK::CommandPool::create( device , device.getGraphicsQueueFamily() );
 		cmd_buf = cmd_pool.createCommandBuffer();
 		graphics_queue = VK::Queue::createGraphicsQueue( device );
@@ -346,7 +352,7 @@ namespace VKInterface
 
 		
 		//goto wait_section;
-		Graphics::PassInfo pass_info;
+		/*Graphics::PassInfo pass_info;
 		Allocator::zero( &pass_info );
 		pass_info.render_targets.push( 0 );
 		pass_info.vertex_attribute_layout.push(
@@ -373,7 +379,7 @@ namespace VKInterface
 		pass_info.viewport_rect = { 0 , 0 , 512 , 512 };
 		passes.push( VK::Pass::create( device , object_pool , pass_info ) );
 		pass_info.render_targets[ 0 ] = 1;
-		passes.push( VK::Pass::create( device , object_pool , pass_info ) );
+		passes.push( VK::Pass::create( device , object_pool , pass_info ) );*/
 		/*Graphics::DrawMeshInfo draw_mesh_info;
 		Allocator::zero( &draw_mesh_info );
 		draw_mesh_info.count = 6;
@@ -400,9 +406,25 @@ namespace VKInterface
 			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
 				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT , VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			);
-			cmd_buf.clearImage( attachment.getImage() , { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } , { 1.0f , 0.0f , 0.0f , 1.0f } );
-			
-			auto &pass = passes[ swap_chain.getCurrentImageIndex() ];
+			cmd_buf.clearImage( attachment.getImage() , { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } , { 0.7f , 0.4f , 0.32f , 1.0f } );
+			if( current_command_pool )
+			{
+				auto &pass = passes[ current_command_pool->pass_handler ];
+				VkClearValue cv[ 1 ] = { { 1.0f , 0.0f , 0.3f , 1.0f } };
+				cmd_buf.beginPass( pass , { 0 , 0 , 512 , 512 } , cv );
+				for( auto const &cmd_buf : current_command_pool->buffers_per_pass )
+				{
+					for( auto const &cmd : cmd_buf.draw_calls )
+					{
+						cmd.dispatch( this , cmd.data );
+					}
+				}
+				cmd_buf.endPass();
+
+				delete current_command_pool;
+				current_command_pool = nullptr;
+			}
+			/*auto &pass = passes[ swap_chain.getCurrentImageIndex() ];
 			
 			qf rot =
 				qf( float3{ 0.0f , 0.0f , 1.0f } , timer.getCurrentTimeMilis() * 1.0e-3f ) //*
@@ -454,8 +476,8 @@ namespace VKInterface
 				}
 				vkUpdateDescriptorSets( device.getHandle() , 2 , write_desc , 0 , NULL );
 			}
-			cmd_buf.beginPass( pass );
-			drawIndexedDispatch( this , &draw_mesh_info );
+			
+			drawIndexedDispatch( this , &draw_mesh_info );*/
 			cmd_buf.ImageBarrier( attachment.getImage() ,
 			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
 				0 , VK_IMAGE_LAYOUT_PRESENT_SRC_KHR

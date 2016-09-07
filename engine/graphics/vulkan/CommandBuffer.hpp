@@ -72,7 +72,7 @@ namespace VK
 				ranges
 			);
 		}
-		void beginPass( Pass const &pass , uint4 render_area , VkClearValue const *clear_color ) const
+		void beginPass( Pass const &pass , int4 render_area , VkClearValue const *clear_color ) const
 		{
 			VkRenderPassBeginInfo render_pass_begin_info;
 			Allocator::zero( &render_pass_begin_info );
@@ -82,13 +82,13 @@ namespace VK
 			render_pass_begin_info.renderArea =
 			{
 				{ render_area.x , render_area.y } ,
-				{ render_area.z , render_area.w }
+				{ ( uint )render_area.z , ( uint )render_area.w }
 			};
 			render_pass_begin_info.clearValueCount = pass.getAttachmentCount();
 			render_pass_begin_info.pClearValues = clear_color;
 			vkCmdBeginRenderPass( getHandle() , &render_pass_begin_info , VK_SUBPASS_CONTENTS_INLINE );
 			vkCmdBindPipeline( getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pass.getPipeline() );
-			vkCmdBindDescriptorSets( getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pass.getPipelineLayout() , 0 , 1 , &pass.getDescriptorSet() , 0 , NULL );
+			//vkCmdBindDescriptorSets( getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pass.getPipelineLayout() , 0 , 1 , &pass.getDescriptorSet() , 0 , NULL );
 		}
 		void blit( Image const &dst , Image const &src , VkImageBlit const *blits , uint blit_count , VkFilter filter ) const
 		{

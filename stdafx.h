@@ -1,7 +1,4 @@
 #pragma once
-#ifdef _WIN32
-#include <windows.h>
-#endif
 #include <functional>
 #include <engine/mem/Allocators.hpp>
 #include <engine/data_struct/Optional.hpp>

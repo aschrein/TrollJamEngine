@@ -95,8 +95,18 @@ namespace VK
 			frame_buffer_create_info.layers = 1;
 			out.frame_buffer.create( device.getHandle() , frame_buffer_create_info );
 
-			LocalArray< VkDescriptorSetLayoutBinding , 10 > layout_bindings;
+			auto &shader = pool.shaders[ info.shader_handler ];
 
+			/*LocalArray< VkDescriptorSetLayoutBinding , 10 > layout_bindings;
+			layout_bindings.push(
+			{
+				0 ,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ,
+				1 ,
+				VK_SHADER_STAGE_ALL ,
+				NULL
+			}
+			);
 			/*VkDescriptorSetLayoutBinding bindongs[] =
 			{
 				{
@@ -113,7 +123,7 @@ namespace VK
 					VK_SHADER_STAGE_ALL ,
 					NULL
 				}
-			};*/
+			};
 			VkDescriptorSetLayoutCreateInfo desc_set_layout_info;
 			Allocator::zero( &desc_set_layout_info );
 			desc_set_layout_info.bindingCount = layout_bindings.size;
@@ -123,11 +133,16 @@ namespace VK
 			out.desc_set_layout.create( device.getHandle() , desc_set_layout_info );
 
 			LocalArray< VkDescriptorPoolSize , 10 > type_counts;
-			/*VkDescriptorPoolSize type_counts[ 2 ];
+			/*type_counts.push(
+			{
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+			}
+			);
+			VkDescriptorPoolSize type_counts[ 2 ];
 			type_counts[ 0 ].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			type_counts[ 0 ].descriptorCount = 1;
 			type_counts[ 1 ].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			type_counts[ 1 ].descriptorCount = 1;*/
+			type_counts[ 1 ].descriptorCount = 1;
 			VkDescriptorPoolCreateInfo desc_pool_info;
 			Allocator::zero( &desc_pool_info );
 			desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -142,30 +157,24 @@ namespace VK
 			desc_set_info.descriptorPool = *out.desc_pool;
 			desc_set_info.descriptorSetCount = 1;
 			desc_set_info.pSetLayouts = &out.desc_set_layout;
-			out.desc_set.create( device.getHandle() , *out.desc_pool , desc_set_info );
+			out.desc_set.create( device.getHandle() , *out.desc_pool , desc_set_info );*/
 
 
-			VkPipelineShaderStageCreateInfo infos[] =
+			LocalArray< VkPipelineShaderStageCreateInfo , 5 > infos;
+			for( auto const &stage : shader.getStages() )
 			{
+				infos.push(
 				{
 					VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO ,
 					nullptr ,
 					0 ,
-					VK_SHADER_STAGE_VERTEX_BIT ,
-					*pool.shader_modules[ 0 ] ,
-					"main" ,
-					nullptr
-				} ,
-				{
-					VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO ,
-					nullptr ,
-					0 ,
-					VK_SHADER_STAGE_FRAGMENT_BIT ,
-					*pool.shader_modules[ 1 ] ,
+					stage.getFlags() ,
+					stage.gethandler() ,
 					"main" ,
 					nullptr
 				}
-			};
+				);
+			}
 			VkPipelineVertexInputStateCreateInfo vertex_state_create_info;
 			Allocator::zero( &vertex_state_create_info );
 			vertex_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -268,14 +277,14 @@ cont:
 			VkPipelineLayoutCreateInfo pipeline_layout_create_info;
 			Allocator::zero( &pipeline_layout_create_info );
 			pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			pipeline_layout_create_info.setLayoutCount = 1;
-			pipeline_layout_create_info.pSetLayouts = &out.desc_set_layout;
+			//pipeline_layout_create_info.setLayoutCount = 1;
+			//pipeline_layout_create_info.pSetLayouts = &out.desc_set_layout;
 			out.pipeline_layout.create( device.getHandle() , pipeline_layout_create_info );
 			VkGraphicsPipelineCreateInfo pipeline_create_info;
 			Allocator::zero( &pipeline_create_info );
 			pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-			pipeline_create_info.stageCount = 2;
-			pipeline_create_info.pStages = infos;
+			pipeline_create_info.stageCount = infos.size;
+			pipeline_create_info.pStages = &infos[ 0 ];
 			pipeline_create_info.pVertexInputState = &vertex_state_create_info;
 			pipeline_create_info.pInputAssemblyState = &input_assembly_create_info;
 			pipeline_create_info.pViewportState = &view_port_create_info;

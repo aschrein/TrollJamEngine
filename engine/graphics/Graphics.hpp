@@ -7,7 +7,6 @@
 #include <engine/data_struct/RingBuffer.hpp>
 #include <engine/graphics/Shader.hpp>
 #include <engine/graphics/Buffers.hpp>
-#include <engine/graphics/Shader.hpp>
 #include <engine/graphics/Textures.h>
 namespace Graphics
 {
@@ -62,6 +61,7 @@ namespace Graphics
 	};
 	class CommandBuffer
 	{
+	public:
 		void putPointLight( PointLightInfo const *info );
 		void putConeLight( ConeLightInfo const *info );
 		void drawIndexed( DrawMeshInfo const *info );
@@ -71,7 +71,8 @@ namespace Graphics
 	};
 	class CommandPool
 	{
-		CommandBuffer *createCommandBuffer( uint pass_id );
+	public:
+		CommandBuffer *createCommandBuffer();
 	};
 	class RenderingBackend;
 	class UniqueHandler
@@ -163,8 +164,8 @@ namespace Graphics
 		NONMOVABLE( RenderingBackend );
 		bool isReady();
 		void wait();
-		Pointers::Unique< CommandPool > createCommandPool();
-		void render( Pointers::Unique< CommandPool > &&cmd_pool );
+		CommandPool *createCommandPool( uint pass_handler );
+		void render( CommandPool *cmd_pool );
 
 		uint createBuffer( BufferInfo info );
 		uint createTexture( TextureInfo info );
@@ -173,7 +174,7 @@ namespace Graphics
 		uint createDepthStencilTarget( DepthStencilTargetInfo info );
 		uint createPass( PassInfo info );
 		uint createSampler( SamplerInfo info );
-		uint createSader( Shader info );
+		uint createShader( ShaderInfo info );
 
 		void freeVertexBuffer( uint hndl );
 		void freeIndexBuffer( uint hndl );

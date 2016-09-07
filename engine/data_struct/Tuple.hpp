@@ -56,6 +56,7 @@ namespace Collections
 	{
 		typedef K Type;
 		K data;
+		Tuple() = default;
 		template< typename M >
 		Tuple( M first ) :
 			data( first )

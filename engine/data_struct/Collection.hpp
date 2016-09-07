@@ -92,5 +92,13 @@ namespace Collections
 			}
 			return true;
 		}
+		void foreach( std::function< void( D const & ) > func ) const
+		{
+			T<D> const *instance = static_cast< T<D> const* >( this );
+			for( auto const &v : *instance )
+			{
+				func( v );
+			}
+		}
 	};
 }

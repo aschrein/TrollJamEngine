@@ -10,8 +10,6 @@
 #include <Init.hpp>
 using namespace Math;
 using namespace Graphics;
-
-Material default_material;
 uint texture_handle = 0;
 FileManager *FileManager::singleton;
 DrawMeshInfo monkey_head_mesh;
@@ -29,12 +27,56 @@ int main( int argc , char ** argv )
 	int2 ms;
 	RenderingBackend *renderer;
 	Signal init_signal;
-	
-	RingBuffer< Pair< OS::InputState::State , OS::InputState::EventType > , 100 > input_events;
+	uint shader_handler;
+	uint vertex_buffer_handler;
+	uint index_buffer_handler;
+	uint pass_handler;
+	LockFree::RingBuffer< Pair< OS::InputState::State , OS::InputState::EventType > , 100 > input_events;
 	OS::Window window = OS::Window( { 100 , 100 , 512 , 512 ,
 		[ & ]()
 	{
 		renderer = window.createRenderingBackend();
+		using namespace Shaders;
+		constexpr size_t t = sizeof( Token );
+		constexpr size_t s = sizeof( Expr );
+		Token in_pos( "in_pos" );
+		Stage vertex_stage;
+		vertex_stage.addIn( 0 , Type::FLOAT3 , in_pos );
+		vertex_stage.getBody().addExpr( Expr::setVertexPos( Expr::createFloat4( in_pos , { 1.0 } ) ) );
+		Stage fragment_stage;
+		Token out_color( "out_color" );
+		fragment_stage.addOut( 0 , Type::FLOAT4 , out_color );
+		fragment_stage.getBody().addExpr( out_color << Expr::createFloat4( { 1.0 } , { 0.4 } , { 0.0 } , { 1.0 } ) );
+		shader_handler = renderer->createShader( { "simple" , {
+			Pair< StageType , Shaders::Stage >{ StageType::VERTEX , vertex_stage } ,
+			Pair< StageType , Shaders::Stage >{ StageType::FRAGMENT , fragment_stage } ,
+		} } );
+		float vertices[] =
+		{
+			-1.0f , -1.0f , 0.0f ,
+			1.0f , -1.0f , 0.0f ,
+			1.0f , 1.0f , 0.0f ,
+			-1.0f , 1.0f , 0.0f
+		};
+		uint indices[] =
+		{
+			0 , 1 , 2 , 0 , 2 , 3
+		};
+		vertex_buffer_handler = renderer->createBuffer( { vertices , 48 , Usage::STATIC , BufferTarget::VERTEX_BUFFER } );
+		index_buffer_handler = renderer->createBuffer( { indices , 24 , Usage::STATIC , BufferTarget::INDEX_BUFFER } );
+		PassInfo pass_info;
+		Allocator::zero( &pass_info );
+		pass_info.render_targets.push( 0 );
+		pass_info.shader_handler = shader_handler;
+		AttributeInfo attr_info;
+		Allocator::zero( &attr_info );
+		attr_info.buffer_index = 0;
+		attr_info.elem_count = 3;
+		attr_info.src_type = PlainFieldType::FLOAT32;
+		pass_info.vertex_attribute_layout.push( attr_info );
+		pass_info.vertex_buffer_binding_strides.push( 12 );
+		pass_handler = renderer->createPass( pass_info );
+		renderer->render( nullptr );
 		init_signal.signal();
 	} ,
 		[]( int x , int y , int w , int h )
@@ -56,164 +98,14 @@ int main( int argc , char ** argv )
 		OS::InputState::State old_state;
 		Allocator::zero( &old_state , 1 );
 		init_signal.wait();
-		/*auto allocator = renderer->getAuxiliaryAllocator();
-		FileManager::singleton->loadFile( { "Suzanne.txt" , "calibri_16.fnt" , "calibri_16.tga" , "wood_texture.tga" } , local_file_consumer.get() , allocator );
-		int files = 4;
-		SimpleMesh3D mesh;
-		BMFontInfo font_bit_map_info;
-		Shared< FileImage > font_bitmap;
-		Shared< FileImage > head_bitmap;
-		BitMap2D tga_map;
-		BitMap2D head_map;
-		void *last_consumed = nullptr;
-		while( files )
-		{
-			FileEvent file_event = local_file_consumer->popEvent( true ).getValue();
-			if( file_event.filename == "Suzanne.txt" )
-			{
-				auto file = std::move( file_event.file_result.getValue() );
-				mesh = parseSimpleMesh3d( ( char const * )file->getView().getRaw() , allocator );
-				files--;
-			} else if( file_event.filename == "calibri_16.tga" )
-			{
-				font_bitmap = std::move( file_event.file_result.getValue() );
-				tga_map = mapTGA( font_bitmap->getView() );
-				files--;
-			} else if( file_event.filename == "wood_texture.tga" )
-			{
-				head_bitmap = std::move( file_event.file_result.getValue() );
-				head_map = mapTGA( head_bitmap->getView() );
-				files--;
-			} else if( file_event.filename == "calibri_16.fnt" )
-			{
-				auto file = std::move( file_event.file_result.getValue() );
-				font_bit_map_info = parseBMFont( ( char const * )file->getView().getRaw() );
-				files--;
-			}
-		}
-		{
-			{
-				VertexBufferInfo *attribute_buffer_desc = allocator->alloc< VertexBufferInfo >();
-				attribute_buffer_desc->data = mesh.positions.getPtr();
-				attribute_buffer_desc->size = mesh.positions.getSize() * sizeof( float3 );
-				attribute_buffer_desc->usage = BufferUsage::STATIC_DRAW;
-				Attribute *attributes = allocator->alloc< Attribute >( 1 );
-				attributes->elem_count = 3;
-				attributes->normalized = false;
-				attributes->offset = 0;
-				attributes->stride = sizeof( float3 );
-				attributes->src_type = PlainFieldType::FLOAT32;
-				attributes->slot = AttributeSlot::POSITION;
-				attribute_buffer_desc->attributes = attributes;
-				attribute_buffer_desc->attributes_count = 1;
-				monkey_head_mesh.vertex_buffer_handle = allocator->alloc< uint >( 2 );
-				monkey_head_mesh.vertex_buffer_handle[ 0 ] = renderer->createVertexBuffer( attribute_buffer_desc );
-			}
-			{
-				VertexBufferInfo *attribute_buffer_desc = allocator->alloc< VertexBufferInfo >();
-				attribute_buffer_desc->data = mesh.normals.getPtr();
-				attribute_buffer_desc->size = mesh.normals.getSize() * sizeof( float3 );
-				attribute_buffer_desc->usage = BufferUsage::STATIC_DRAW;
-				Attribute *attributes = allocator->alloc< Attribute >( 1 );
-				attributes->elem_count = 3;
-				attributes->normalized = false;
-				attributes->offset = 0;
-				attributes->stride = sizeof( float3 );
-				attributes->src_type = PlainFieldType::FLOAT32;
-				attributes->slot = AttributeSlot::NORMAL;
-				attribute_buffer_desc->attributes = attributes;
-				attribute_buffer_desc->attributes_count = 1;
-				monkey_head_mesh.vertex_buffer_handle[ 1 ] = renderer->createVertexBuffer( attribute_buffer_desc );
-				monkey_head_mesh.vertex_buffers_count = 2;
-			}
-			{
-				IndexBufferInfo *index_buffer_desc = allocator->alloc< IndexBufferInfo >();
-				index_buffer_desc->data = mesh.faces.getPtr();
-				index_buffer_desc->size = mesh.faces.getSize() * sizeof( i3 );
-				index_buffer_desc->index_type = IndexType::UINT32;
-				index_buffer_desc->usage = BufferUsage::STATIC_DRAW;
-				monkey_head_mesh.index_buffer_handle = renderer->createIndexBuffer( index_buffer_desc );
-			}
-			monkey_head_mesh.count = mesh.faces.getSize() * 3;
-			monkey_head_mesh.start_index = 0;
-			monkey_head_mesh.primitive_type = PrimitiveType::TRIANGLES;
-		}
-		/*{
-			monkey_head_mesh.primitive_type = PrimitiveType::TRIANGLES;
 
-			TextureInfo *texture_desc = allocator->alloc< TextureInfo >();
-			texture_desc->bitmap = head_map;
-			texture_desc->mag_filter = MAGFilter::LINEAR;
-			texture_desc->min_filter = MINFilter::MIPMAP_LINEAR;
-			texture_desc->x_regime = WrapRegime::MIRROR;
-			texture_desc->y_regime = WrapRegime::MIRROR;
-
-			Allocator::zero( &default_material , 1 );
-			default_material.has_albedo_texture = true;
-			default_material.albedo = renderer->createTexture( texture_desc );
-
-			texture_desc = allocator->alloc< TextureInfo >();
-			texture_desc->bitmap = tga_map;
-			texture_desc->mag_filter = MAGFilter::LINEAR;
-			texture_desc->min_filter = MINFilter::MIPMAP_LINEAR;
-			texture_desc->x_regime = WrapRegime::MIRROR;
-			texture_desc->y_regime = WrapRegime::MIRROR;
-
-			texture_handle = renderer->createTexture( texture_desc );
-
-			static float svertex_positions[] =
-			{
-				-1.0f , -1.0f , 0.0f , 0.0f , 0.0f , 1.0f ,
-				1.0f , -1.0f , 0.0f , 0.0f , 0.0f , 1.0f ,
-				1.0f , 1.0f , 0.0f , 0.0f , 0.0f , 1.0f ,
-				-1.0f , 1.0f , 0.0f , 0.0f , 0.0f , 1.0f
-			};
-			static uint sindices[] =
-			{
-				0 , 1 , 2 , 0 , 2 , 3
-			};
-			{
-				{
-					VertexBufferInfo *attribute_buffer_desc = allocator->alloc< VertexBufferInfo >();
-					float *data = ( float * )allocator->alloc( sizeof( svertex_positions ) );
-					Allocator::copy( data , svertex_positions , sizeof( svertex_positions ) / sizeof( float ) );
-					attribute_buffer_desc->data = data;
-					attribute_buffer_desc->size = sizeof( svertex_positions );
-					attribute_buffer_desc->usage = BufferUsage::STATIC_DRAW;
-					Attribute *attributes = allocator->alloc< Attribute >( 2 );
-					attributes[ 0 ].elem_count = 3;
-					attributes[ 0 ].normalized = false;
-					attributes[ 0 ].offset = 0;
-					attributes[ 0 ].stride = 24;
-					attributes[ 0 ].src_type = PlainFieldType::FLOAT32;
-					attributes[ 0 ].slot = AttributeSlot::POSITION;
-					attributes[ 1 ].elem_count = 3;
-					attributes[ 1 ].normalized = false;
-					attributes[ 1 ].offset = 12;
-					attributes[ 1 ].stride = 24;
-					attributes[ 1 ].src_type = PlainFieldType::FLOAT32;
-					attributes[ 1 ].slot = AttributeSlot::NORMAL;
-					attribute_buffer_desc->attributes = attributes;
-					attribute_buffer_desc->attributes_count = 2;
-					plane_mesh.vertex_buffer_handle = allocator->alloc< uint >( 1 );
-					plane_mesh.vertex_buffer_handle[ 0 ] = renderer->createVertexBuffer( attribute_buffer_desc );
-					plane_mesh.vertex_buffers_count = 1;
-				}
-				{
-					IndexBufferInfo *index_buffer_desc = allocator->alloc< IndexBufferInfo >();
-					uint *indices = ( uint * )allocator->alloc( sizeof( sindices ) );
-					index_buffer_desc->data = indices;
-					index_buffer_desc->size = 6 * sizeof( uint );
-					Allocator::copy( indices , sindices , 6 );
-					index_buffer_desc->index_type = IndexType::UINT32;
-					index_buffer_desc->usage = BufferUsage::STATIC_DRAW;
-					plane_mesh.index_buffer_handle = renderer->createIndexBuffer( index_buffer_desc );
-				}
-				plane_mesh.count = 6;
-				plane_mesh.start_index = 0;
-				plane_mesh.primitive_type = PrimitiveType::TRIANGLES;
-			}
-		}*/
+		DrawMeshInfo mesh_info;
+		Allocator::zero( &mesh_info );
+		mesh_info.index_buffer = { index_buffer_handler , 0 };
+		mesh_info.vertex_buffers.push( { 0 , 0 } );
+		mesh_info.instance_count = 1;
+		mesh_info.index_count = 3;
+		
 		while( true )
 		{
 			/*float3 camera_dir = float3{
@@ -341,9 +233,12 @@ int main( int argc , char ** argv )
 				}
 			}*/
 			renderer->wait();
+			auto cmd_pool = renderer->createCommandPool( pass_handler );
+			auto cmd = cmd_pool->createCommandBuffer();
+			cmd->drawIndexed( &mesh_info );
 			//OS::IO::debugLogln( "update thread woked up" );
 			//renderer->pushCommand( cmd_buffer );
-			renderer->render(nullptr);
+			renderer->render( std::move( cmd_pool ) );
 		}
 	}
 	);

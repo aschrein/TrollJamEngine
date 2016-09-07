@@ -4,6 +4,8 @@
 #include <engine/os/Window.hpp>
 #include <engine/graphics/vulkan/Images.hpp>
 #include <engine/graphics/vulkan/ObjectPool.hpp>
+#undef min
+#undef max
 namespace VK
 {
 	class SwapChain
@@ -105,7 +107,9 @@ namespace VK
 			{
 				swap_chain_extent = surface.capabilities.currentExtent;
 			}
-			uint32_t desired_images_count = Math::MathUtil< uint32_t >::min( Math::MathUtil< uint32_t >::max( surface.capabilities.minImageCount , images_count ) , surface.capabilities.maxImageCount );
+			uint32_t desired_images_count = Math::MathUtil< uint >::min(
+				Math::MathUtil< uint32_t >::max( surface.capabilities.minImageCount , images_count )
+				, surface.capabilities.maxImageCount );
 			VkSurfaceTransformFlagsKHR surface_transform_flags;
 			if( surface.capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR )
 			{

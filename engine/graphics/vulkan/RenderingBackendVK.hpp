@@ -29,12 +29,15 @@ namespace VKInterface
 		Allocator *allocator;
 		Array< DrawCallInfo > draw_calls;
 		Pointers::Unique< LinearAllocator > linear_allocator;
+		~CommandBuffer() = default;
 	};
 	class CommandPool : public Graphics::CommandPool
 	{
 	public:
 		Allocator *allocator = Allocator::singleton;
-		LocalArray< Pair< uint , CommandBuffer > , 100 > buffers_per_pass;
+		LocalArray< CommandBuffer , 100 > buffers_per_pass;
+		uint pass_handler;
+		~CommandPool() = default;
 	};
 	struct CreationDesc
 	{
@@ -69,9 +72,9 @@ namespace VKInterface
 		VK::CommandBuffer cmd_buf;
 		VK::Queue graphics_queue;
 		VK::ObjectPool object_pool;
-		Pointers::Unique< Graphics::CommandPool > current_command_pool = nullptr;
+		CommandPool *current_command_pool = nullptr;
 		LocalArray< VK::Pass , 1000 > passes;
-		//RingBuffer< CommandBufferPool* , 20 > command_queue;
+		//RingBuffer< CommandPool* , 20 > command_queue;
 		RingBuffer< CreationDesc , 1000 > creation_queue;
 		void mainloop();
 	};

@@ -55,7 +55,7 @@ namespace Allocators
 			::_aligned_free( ptr );
 		}
 		template< typename T >
-		static void copy( T *dst , T const *src , uint count )
+		static void copy( T *dst , T const *src , uint count = 1 )
 		{
 			memcpy( dst , src , count * sizeof( T ) );
 		}

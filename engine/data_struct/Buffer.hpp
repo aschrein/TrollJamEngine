@@ -83,11 +83,43 @@ namespace Collections
 				return pos != a.pos;
 			}
 		};
+		struct CArrayIterator
+		{
+			LocalArray const *array;
+			uint pos;
+			T const &operator*() const
+			{
+				return *( array->data + pos );
+			}
+			T const *operator->() const
+			{
+				return ( array->data + pos );
+			}
+			CArrayIterator operator++( int )
+			{
+				pos++;
+				return *this;
+			}
+			CArrayIterator operator++()
+			{
+				CArrayIterator out = *this;
+				pos++;
+				return out;
+			}
+			bool operator==( CArrayIterator const &a ) const
+			{
+				return pos == a.pos;
+			}
+			bool operator!=( CArrayIterator const &a ) const
+			{
+				return pos != a.pos;
+			}
+		};
 		ArrayIterator begin()
 		{
 			return{ this , 0 };
 		}
-		ArrayIterator begin() const
+		CArrayIterator begin() const
 		{
 			return{ this , 0 };
 		}
@@ -95,9 +127,9 @@ namespace Collections
 		{
 			return{ this , size };
 		}
-		ArrayIterator end() const
+		CArrayIterator end() const
 		{
-			return{ this , size };
+			return CArrayIterator{ this , size };
 		}
 	};
 	class BufferView

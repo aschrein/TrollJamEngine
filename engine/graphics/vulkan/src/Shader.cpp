@@ -2,7 +2,7 @@
 #include <engine/graphics/Shader.hpp>
 namespace Graphics
 {
-	Expr Expr::operator=( Expr const &expr ) const
+	/*Expr Expr::operator=( Expr const &expr ) const
 	{
 		return{ name + "=" + expr.name };
 	}
@@ -221,13 +221,13 @@ namespace Graphics
 		auto nthis = ( PipelineStageData* )this;
 		nthis->~PipelineStageData();
 		//nthis->allocator->free( nthis );
-	}
+	}*/
 }
 namespace Collections
 {
-	template<>
+	/*template<>
 	void StringUtil::stringify< Graphics::Expr >( char *mem , Graphics::Expr const &val )
 	{
 		Allocator::copy( mem , val.name.getChars() , val.name.getLength() + 1 );
-	}
+	}*/
 }
