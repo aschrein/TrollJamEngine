@@ -42,6 +42,7 @@ namespace VK
 		VkFormat format;
 		mutable VkImageLayout layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
 		mutable VkAccessFlags access = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+		VkImageAspectFlags aspect_mask = 0;
 		MemoryContainer memory;
 		uint offset = 0;
 		uint width , height , depth = 1;
@@ -52,7 +53,9 @@ namespace VK
 		VK_OBJECT( Image );
 		static Image create(
 			Device const &device , Memory *memory , uint width , uint height ,
-			uint mip_levels , uint layers , VkImageLayout initial_layout , VkFormat format , VkImageUsageFlags usage_flags
+			uint mip_levels , uint layers , VkImageLayout initial_layout , VkFormat format ,
+			VkImageUsageFlags usage_flags ,
+			VkImageAspectFlags aspect_mask
 		)
 		{
 			VkImageCreateInfo image_info;
@@ -68,12 +71,13 @@ namespace VK
 			image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
 			image_info.usage = usage_flags;
 			image_info.flags = 0;
-			image_info.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+			image_info.initialLayout = initial_layout;
 
 			VkMemoryRequirements mem_req;
 			
 			VkResult err;
 			Image out;
+			out.aspect_mask = aspect_mask;
 			out.handle.create( device.getHandle() , image_info );
 			vkGetImageMemoryRequirements( device.getHandle() , out.getHandle() , &mem_req );
 			out.depth = 1;
@@ -81,6 +85,7 @@ namespace VK
 			out.format = format;
 			out.height = height;
 			out.width = width;
+			out.layout = initial_layout;
 			out.layers = layers;
 			out.mip_levels = mip_levels;
 			out.offset = memory->allocate( mem_req.size );
@@ -146,28 +151,31 @@ namespace VK
 		Unique< VkSampler > sampler;
 	public:
 		VK_OBJECT( Attachment );
-		static Attachment createRenderTarget( Device const &device , Memory *memory , Graphics::RenderTargetInfo const &info )
+		static Attachment createRenderTarget( Device const &device , Memory *memory , Graphics::RenderTargetCreateInfo const &info , bool sampled = true , VkImageUsageFlags usage_flags = 0 )
 		{
 			Attachment out;
 			out.image = Image::create( device , memory , info.size.x , info.size.y , 1 , 1 ,
 				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL , getVK( info.component_mapping ) ,
-				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | usage_flags | ( sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0 ) , VK_IMAGE_ASPECT_COLOR_BIT
 			);
 			out.view = out.image.createView(
 			{ VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A } ,
 			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 }
 			);
-			VkSamplerCreateInfo sampler;
-			Allocator::zero( &sampler );
-			sampler.magFilter = VK_FILTER_NEAREST;
-			sampler.minFilter = VK_FILTER_NEAREST;
-			sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-			sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-			sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-			sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-			sampler.compareOp = VK_COMPARE_OP_NEVER;
-			sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-			out.sampler.create( device.getHandle() , sampler );
+			if( sampled )
+			{
+				VkSamplerCreateInfo sampler;
+				Allocator::zero( &sampler );
+				sampler.magFilter = VK_FILTER_NEAREST;
+				sampler.minFilter = VK_FILTER_NEAREST;
+				sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+				sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+				sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+				sampler.compareOp = VK_COMPARE_OP_NEVER;
+				sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+				out.sampler.create( device.getHandle() , sampler );
+			}
 			return out;
 		}
 		ImageView const &getView() const

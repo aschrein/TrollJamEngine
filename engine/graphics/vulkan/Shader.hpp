@@ -140,7 +140,7 @@ namespace VK
 		LocalArray< ShaderIn , 20 > attributes;
 		LocalArray< uint , 10 > textures;
 	public:
-		static Shader create( Device const &device , Graphics::ShaderInfo const &info )
+		static Shader create( Device const &device , Graphics::ShaderCreateInfo const &info )
 		{
 			Shader out;
 			for( auto const &stage_info : info.stages )
@@ -197,11 +197,11 @@ namespace VK
 			} );
 			stage_info.textures2d.foreach( [ &out ]( auto const &expr )
 			{
-				out += "layout( location = " + String( expr.key ) + " ) uniform sampler2D " + expr.value + ";\n";
+				out += "layout( binding = " + String( expr.key ) + " ) uniform sampler2D " + expr.value + ";\n";
 			} );
 			stage_info.constants.foreach( [ &out ]( auto const &expr )
 			{
-				out += "layout( location = " + Graphics::Shaders::getTypeRepr( expr.key ) + " ) uniform " + expr.value + ";\n";
+				out += "layout( binding = " + Graphics::Shaders::getTypeRepr( expr.key ) + " ) uniform " + expr.value + ";\n";
 			} );
 			stage_info.functions.foreach( [ &out ]( auto const &expr )
 			{

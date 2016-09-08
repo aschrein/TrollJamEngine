@@ -2,12 +2,15 @@
 #include <engine/assets/FileManager.hpp>
 #include <engine/graphics/Graphics.hpp>
 #include <engine/os/Files.hpp>
-static Graphics::BitMap2D mapTGA( OS::Files::ImmutableFileView const &file )
+static Graphics::BitMap mapTGA( OS::Files::ImmutableFileView const &file )
 {
-	Graphics::BitMap2D out;
+	Graphics::BitMap out;
 	file.setPosition( 12 );
 	out.width = file.getInc< uint16_t >();
 	out.height = file.getInc< uint16_t >();
+	out.depth = 1;
+	out.layers_count = 1;
+	out.mipmaps_count = 1;
 	byte bpp = file.getInc< byte >();
 	out.data = ( uint8_t* )file.getRaw() + 18;
 	/*if( bpp == 8 )

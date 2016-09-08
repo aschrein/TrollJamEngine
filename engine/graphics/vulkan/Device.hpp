@@ -57,7 +57,7 @@ namespace VK
 			out.create( *handle , shader_module_create_info );
 			return out;
 		}
-		Unique< VkSampler > createSampler( Graphics::SamplerInfo const &info )
+		Unique< VkSampler > createSampler( Graphics::SamplerCreateInfo const &info )
 		{
 			VkSamplerCreateInfo sampler;
 			Allocator::zero( &sampler );

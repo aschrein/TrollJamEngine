@@ -126,7 +126,7 @@ namespace VK
 			swap_chain_create_info.imageFormat = surface.preffered_format.format;
 			swap_chain_create_info.imageColorSpace = surface.preffered_format.colorSpace;
 			swap_chain_create_info.imageExtent = swap_chain_extent;
-			swap_chain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+			swap_chain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 			swap_chain_create_info.preTransform = ( VkSurfaceTransformFlagBitsKHR )surface_transform_flags;
 			swap_chain_create_info.imageArrayLayers = 1;
 			swap_chain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -147,7 +147,7 @@ namespace VK
 				Image image;
 				image.handle.init( dev.getHandle() , images[ i ] );
 				image.format = swap_chain_create_info.imageFormat;
-				image.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+				image.layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
 				image.dev_raw = dev.getHandle();
 				image.height = out.height;
 				image.width = out.width;
@@ -158,6 +158,7 @@ namespace VK
 				) );
 				attachment.image = std::move( image );
 				pool.attachments.push( std::move( attachment ) );
+				pool.attachment_counter++;
 			}
 			return out;
 		}

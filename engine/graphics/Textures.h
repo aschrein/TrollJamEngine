@@ -21,7 +21,7 @@ namespace Graphics
 	struct ComponentMapping
 	{
 		ComponentFormat format;
-		ComponentType type = ComponentType::BYTE;
+		ComponentType type;
 	};
 	enum class ImageCompression
 	{
@@ -45,16 +45,16 @@ namespace Graphics
 		return _comp[ ( uint )mapping.format ] * _sizes[ ( uint )mapping.type ];
 	}
 	//strict linear layout and power of two size
-	struct BitMap2D
+	struct BitMap
 	{
 		void const *data;
 		uint size;
 		uint width;
 		uint height;
-		uint depth = 1;
-		uint layers_count = 1;
-		uint mipmaps_count = 1;
-		ImageCompression compression = ImageCompression::NONE;
+		uint depth;
+		uint layers_count;
+		uint mipmaps_count;
+		ImageCompression compression;
 		ComponentMapping component_mapping;
 		uint getBpp() const
 		{
@@ -69,51 +69,44 @@ namespace Graphics
 	{
 		CLAMP , REPEAT , MIRROR
 	};
-	struct SamplerInfo
+	struct SamplerCreateInfo
 	{
 		Filter mag_filter;
 		Filter min_filter;
 		bool use_mipmap;
-		uint anisotropy_level;
+		uint max_anisotropy_level;
 		WrapRegime u_regime;
 		WrapRegime v_regime;
 		WrapRegime w_regime;
 	};
-	struct RenderTargetInfo
+	struct RenderTargetCreateInfo
 	{
 		ComponentMapping component_mapping;
 		uint2 size;
 	};
-	struct DepthStencilTargetInfo
+	enum class DepthFormat
 	{
+		DEPTH32 , DEPTH24_STENCIL8
+	};
+	struct DepthStencilTargetCreateInfo
+	{
+		DepthFormat format;
 		uint2 size;
 	};
-	struct TextureInfo
+	struct TextureCreateInfo
 	{
-		BitMap2D bitmap;
+		BitMap bitmap;
 		Usage usage;
-	};
-	enum class TextureSlot
-	{
-		ALBEDO , NORMAL , METALNESS , ROUGHNESS
 	};
 	struct TextureRef
 	{
-		uint texture_view;
-		uint sampler;
-		TextureSlot target;
+		uint view_handler;
+		uint sampler_handler;
 	};
-	struct TextureViewInfo
+	struct TextureViewCreateInfo
 	{
 		uint texture_handler;
 		ComponentSwizzle swizzle[ 4 ];
 	};
-	enum class RenderTargetType
-	{
-		COLOR , DEPTH , DEPTH_STENCIL
-	};
-	enum class DepthFormat
-	{
-		DEPTH32_UINT
-	};
+	
 }

@@ -12,10 +12,10 @@ namespace Graphics
 		VERTEX , FRAGMENT , GEOMETRY , TESSELATION_CONTROL , TESSELATION_EVAL
 	};
 	using namespace Collections;
-	struct ShaderInfo
+	struct ShaderCreateInfo
 	{
 		String name;
 		Array< Pair< StageType , Shaders::Stage > > stages;
-		~ShaderInfo() = default;
+		~ShaderCreateInfo() = default;
 	};
 }

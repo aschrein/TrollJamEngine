@@ -19,7 +19,7 @@ namespace VK
 		Unique< VkFramebuffer > frame_buffer;
 		LocalArray< uint , 10 > attachment_indices;
 	public:
-		static Pass create( Device const &device , ObjectPool const &pool , Graphics::PassInfo const &info )
+		static Pass create( Device const &device , ObjectPool const &pool , Graphics::PassCreateInfo const &info )
 		{
 			LocalArray< VkAttachmentDescription , 10 > attachments_desc;
 			LocalArray< VkAttachmentReference , 10 > attachments_ref;
@@ -216,7 +216,7 @@ namespace VK
 cont:
 				attrib_desc.push(
 				{
-					getVK( info.vertex_attribute_layout[ i ].slot ) ,
+					info.vertex_attribute_layout[ i ].slot ,
 					info.vertex_attribute_layout[ i ].buffer_index ,
 					attribute_format ,
 					info.vertex_attribute_layout[ i ].offset

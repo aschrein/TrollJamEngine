@@ -13,7 +13,7 @@ namespace Graphics
 	{
 		VERTEX_BUFFER , INDEX_BUFFER , UNIFORM_BUFFER
 	};
-	struct BufferInfo
+	struct BufferCreateInfo
 	{
 		void *data;
 		uint size;
@@ -24,18 +24,14 @@ namespace Graphics
 	{
 		UINT32 , UINT16
 	};
-	enum class AttributeSlot : uint
-	{
-		POSITION , NORMAL , TANGENT , BINORMAL , TEXCOORD , BONEINDICES , BONEWEIGHTS , MODEL_TRANSFORM , SKELETAL_TRANSFORM , VIEW_PROJ
-	};
 	struct BufferRef
 	{
-		uint handler;
+		uint buffer_handler;
 		uint offset;
 	};
 	struct AttributeInfo
 	{
-		AttributeSlot slot;
+		uint slot;
 		uint offset;
 		uint elem_count;
 		PlainFieldType src_type;
@@ -45,7 +41,7 @@ namespace Graphics
 	};
 	struct UniformInfo
 	{
-		AttributeSlot slot;
+		uint slot;
 		uint offset;
 		uint elem_count;
 		PlainFieldType src_type;

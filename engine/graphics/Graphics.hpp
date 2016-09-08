@@ -17,29 +17,6 @@ namespace Graphics
 	{
 		FILL , FILL_BACK , FILL_FRONT , WIRE
 	};
-	struct PointLightInfo
-	{
-		float3 position;
-		float3 color;
-		float linear_falloff;
-		float quadratic_falloff;
-		uint shadow_render_target;
-		bool cast_shadows;
-		uint mask_texture_view;
-		bool use_mask;
-	};
-	struct ConeLightInfo
-	{
-		float3 position;
-		float3 direction;
-		float3 color;
-		float linear_falloff;
-		float quadratic_falloff;
-		uint shadow_render_target;
-		bool cast_shadows;
-		uint mask_texture_view;
-		bool use_mask;
-	};
 	enum class PrimitiveType : uint
 	{
 		TRIANGLES , LINES , PATCHES , QUADS , POINTS
@@ -62,10 +39,9 @@ namespace Graphics
 	class CommandBuffer
 	{
 	public:
-		void putPointLight( PointLightInfo const *info );
-		void putConeLight( ConeLightInfo const *info );
 		void drawIndexed( DrawMeshInfo const *info );
-		void fillBuffer( uint buf_handler , void const *data , uint size );
+		void presentTarget( uint rt_hndl );
+		void fillBuffer( uint dst_buffer , void const *data , uint size );
 		void fence();
 		void *allocate( uint size );
 	};
@@ -134,7 +110,7 @@ namespace Graphics
 	{
 		CLOCKWISE , COUNTER_CLOCKWISE
 	};
-	struct PassInfo
+	struct PassCreateInfo
 	{
 		LocalArray< uint , 10 > render_targets;
 		uint depth_stencil_target;
@@ -167,21 +143,21 @@ namespace Graphics
 		CommandPool *createCommandPool( uint pass_handler );
 		void render( CommandPool *cmd_pool );
 
-		uint createBuffer( BufferInfo info );
-		uint createTexture( TextureInfo info );
-		uint createTextureView( TextureViewInfo info );
-		uint createRenderTarget( RenderTargetInfo info );
-		uint createDepthStencilTarget( DepthStencilTargetInfo info );
-		uint createPass( PassInfo info );
-		uint createSampler( SamplerInfo info );
-		uint createShader( ShaderInfo info );
+		uint createBuffer( BufferCreateInfo info );
+		uint createTexture( TextureCreateInfo info );
+		uint createTextureView( TextureViewCreateInfo info );
+		uint createRenderTarget( RenderTargetCreateInfo info );
+		uint createDepthStencilTarget( DepthStencilTargetCreateInfo info );
+		uint createPass( PassCreateInfo info );
+		uint createSampler( SamplerCreateInfo info );
+		uint createShader( ShaderCreateInfo info );
 
-		void freeVertexBuffer( uint hndl );
+		/*void freeVertexBuffer( uint hndl );
 		void freeIndexBuffer( uint hndl );
 		void freeTexture( uint hndl );
 		void freeTextureView( uint hndl );
 		void freeSampler( uint hndl );
 		void freePass( uint hndl );
-		void freeRenderTarget( uint hndl );
+		void freeRenderTarget( uint hndl );*/
 	};
 }

@@ -51,8 +51,10 @@ namespace VK
 			barrier.dstQueueFamilyIndex = family;
 			barrier.image = image.getHandle();
 			barrier.subresourceRange = range;
-			vkCmdPipelineBarrier( *handle , VK_PIPELINE_STAGE_ALL_COMMANDS_BIT , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT ,
+			vkCmdPipelineBarrier( *handle , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT ,
 				0 , 0 , nullptr , 0 , nullptr , 1 , &barrier );
+			image.setLayout( layout );
+			image.setAccessFlags( access_flags );
 		}
 		void copy( Buffer const &dst , Buffer const &src , uint size ) const
 		{

@@ -41,10 +41,6 @@ namespace VK
 		};
 		return _vk[ ( uint )type ];
 	}
-	inline uint getVK( Graphics::AttributeSlot slot )
-	{
-		return ( uint )slot;
-	}
 	/*enum class ImageAccessMask : uint
 	{
 		COLOR_ATTACHMENT , READ , WRITE
@@ -183,6 +179,16 @@ namespace VK
 				return VK_FORMAT_R8G8B8A8_UINT;
 			case Graphics::ComponentType::UNORM8:
 				return VK_FORMAT_R8G8B8A8_UNORM;
+			case Graphics::ComponentType::UNORM16:
+				return VK_FORMAT_R16G16B16A16_UNORM;
+			}
+		case Graphics::ComponentFormat::BGRA:
+			switch( mapping.type )
+			{
+			case Graphics::ComponentType::BYTE:
+				return VK_FORMAT_B8G8R8A8_UINT;
+			case Graphics::ComponentType::UNORM8:
+				return VK_FORMAT_B8G8R8A8_UNORM;
 			case Graphics::ComponentType::UNORM16:
 				return VK_FORMAT_R16G16B16A16_UNORM;
 			}

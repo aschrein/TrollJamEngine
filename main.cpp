@@ -30,6 +30,7 @@ int main( int argc , char ** argv )
 	uint shader_handler;
 	uint vertex_buffer_handler;
 	uint index_buffer_handler;
+	uint render_target_handler;
 	uint pass_handler;
 	LockFree::RingBuffer< Pair< OS::InputState::State , OS::InputState::EventType > , 100 > input_events;
 	OS::Window window = OS::Window( { 100 , 100 , 512 , 512 ,
@@ -64,9 +65,13 @@ int main( int argc , char ** argv )
 		};
 		vertex_buffer_handler = renderer->createBuffer( { vertices , 48 , Usage::STATIC , BufferTarget::VERTEX_BUFFER } );
 		index_buffer_handler = renderer->createBuffer( { indices , 24 , Usage::STATIC , BufferTarget::INDEX_BUFFER } );
-		PassInfo pass_info;
+		RenderTargetCreateInfo rtinfo;
+		rtinfo.component_mapping = { ComponentFormat::BGRA , ComponentType::UNORM8 };
+		rtinfo.size = { 512 , 512 };
+		render_target_handler = renderer->createRenderTarget( rtinfo );
+		PassCreateInfo pass_info;
 		Allocator::zero( &pass_info );
-		pass_info.render_targets.push( 0 );
+		pass_info.render_targets.push( render_target_handler );
 		pass_info.shader_handler = shader_handler;
 		AttributeInfo attr_info;
 		Allocator::zero( &attr_info );
