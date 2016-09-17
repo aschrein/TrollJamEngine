@@ -11,7 +11,7 @@ namespace Graphics
 	};
 	enum class ComponentFormat
 	{
-		RGB , RGBA , BGR , BGRA , R
+		RGB , RGBA , BGR , BGRA , R , RG
 	};
 	enum class ComponentSwizzle : uint
 	{
@@ -40,7 +40,7 @@ namespace Graphics
 		};
 		static uint _comp[] =
 		{
-			3 , 4 , 3 , 4 , 1
+			3 , 4 , 3 , 4 , 1 , 2
 		};
 		return _comp[ ( uint )mapping.format ] * _sizes[ ( uint )mapping.type ];
 	}
@@ -51,8 +51,6 @@ namespace Graphics
 		uint size;
 		uint width;
 		uint height;
-		uint depth;
-		uint layers_count;
 		uint mipmaps_count;
 		ImageCompression compression;
 		ComponentMapping component_mapping;
@@ -79,34 +77,11 @@ namespace Graphics
 		WrapRegime v_regime;
 		WrapRegime w_regime;
 	};
-	struct RenderTargetCreateInfo
-	{
-		ComponentMapping component_mapping;
-		uint2 size;
-	};
-	enum class DepthFormat
-	{
-		DEPTH32 , DEPTH24_STENCIL8
-	};
-	struct DepthStencilTargetCreateInfo
-	{
-		DepthFormat format;
-		uint2 size;
-	};
 	struct TextureCreateInfo
 	{
 		BitMap bitmap;
+		SamplerCreateInfo sampler_info;
 		Usage usage;
-	};
-	struct TextureRef
-	{
-		uint view_handler;
-		uint sampler_handler;
-	};
-	struct TextureViewCreateInfo
-	{
-		uint texture_handler;
-		ComponentSwizzle swizzle[ 4 ];
 	};
 	
 }

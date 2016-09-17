@@ -12,7 +12,7 @@ namespace Graphics
 	{
 		enum class Type
 		{
-			VOID , FLOAT , FLOAT2 , FLOAT3 , FLOAT4 , INT , INT2 , INT3 , INT4
+			VOID , FLOAT , FLOAT2 , FLOAT3 , FLOAT4 , INT , INT2 , INT3 , INT4 , FLOAT4X4
 		};
 		inline String getTypeRepr( Type type )
 		{
@@ -282,11 +282,18 @@ namespace Graphics
 				out.token_array.push( { OperatorType::EQU } );
 				return out.add( expr );
 			}
-			Expr operator&( String const &field ) const
+			Expr operator&( Expr const &field ) const
 			{
 				Expr out = *this;
-				out.token_array.push( { OperatorType::DOT } );
-				out.token_array.push( field );
+				out << Token{ OperatorType::DOT };
+				out << field;
+				return out;
+			}
+			Expr operator&( Token const &field ) const
+			{
+				Expr out = *this;
+				out << Token{ OperatorType::DOT };
+				out << field;
 				return out;
 			}
 			Expr operator&( Swizzle swizzle ) const
@@ -553,19 +560,32 @@ namespace Graphics
 				return out;
 			}
 		};
-		struct VaryingSlot
-		{
-			String name;
-			Type type;
-			uint location;
-		};
 		typedef Pair< Type , String > Arg;
+		class ConstantBlock
+		{
+		public:
+			uint set;
+			uint binding;
+			String name;
+			Array< Pair< Type , String > > constants;
+			ConstantBlock( uint set , uint binding , String const &name ) :
+				set( set ) ,
+				binding( binding ) ,
+				name( name )
+			{}
+			ConstantBlock() = default;
+			ConstantBlock &addConstant( Type type , String const &name )
+			{
+				constants.push( { type , name } );
+				return *this;
+			}
+		};
 		class Stage
 		{
 		public:
 			Array< Tuple< uint , Type , String > > in;
 			Array< Tuple< uint , Type , String > > out;
-			Array< Pair< Type , String > > constants;
+			Array< ConstantBlock > constant_blocks;
 			Array< Pair< uint , String > > textures2d;
 			Array< Function > functions;
 			Function body;
@@ -587,6 +607,11 @@ namespace Graphics
 			Stage &addTexture2D( uint location , String const &name )
 			{
 				textures2d.push( { location , name } );
+				return *this;
+			}
+			Stage &addConstantBlock( ConstantBlock  const &cb )
+			{
+				constant_blocks.push( cb );
 				return *this;
 			}
 			Function &getBody()
@@ -615,10 +640,10 @@ namespace Graphics
 				{
 					out += "texture2D location =" + String( expr.key ) + " " + expr.value + ";\n";
 				} );
-				constants.foreach( [ &out , this ]( auto const &expr )
+				/*constant_blocks.foreach( [ &out , this ]( auto const &expr )
 				{
-					out += "constant location =" + Graphics::Shaders::getTypeRepr( expr.key ) + " " + expr.value + ";\n";
-				} );
+					out += "constant block location =" + Graphics::Shaders::getTypeRepr( expr.key ) + " " + expr.value + ";\n";
+				} );*/
 				functions.foreach( [ &out , this ]( auto const &expr )
 				{
 					out += expr.getRepr();

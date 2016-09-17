@@ -1,39 +1,41 @@
 #include <stdafx.h>
 #include <engine/graphics/vulkan/RenderingBackendVK.hpp>
-#include <engine/graphics/vulkan/Instance.hpp>
-#include <engine/graphics/vulkan/CommandBuffer.hpp>
-#include <engine/graphics/vulkan/Queue.hpp>
-#include <engine/graphics/vulkan/Buffers.hpp>
-#include <engine/graphics/vulkan/Pass.hpp>
+#include <engine/graphics/vulkan/SwapChain.hpp>
 #include <engine/graphics/Camera.hpp>
 #include <engine/assets/FileManager.hpp>
 #include <engine/util/defines.hpp>
 #include <engine/data_struct/Buffer.hpp>
 #include <engine/mem/Allocators.hpp>
 #include <engine/os/Window.hpp>
-void drawIndexedDispatch( VKInterface::RenderingBackend *backend , void const *data )
+void drawIndexedDispatch( VKInterface::RenderingBackend *backend , VKInterface::GraphicsState &state ,
+	VK::CommandBuffer const &graphics_cmd , VK::CommandBuffer const &transfer_cmd ,
+	uint transfer_queue_index , void *data )
 {
 	Graphics::DrawMeshInfo const *info = ( Graphics::DrawMeshInfo const * )data;
-	LocalArray< VkBuffer , 10 > buffers;
-	LocalArray< VkDeviceSize , 10 > offsets;
-	ito( info->vertex_buffers.size )
+	auto &pipeline = backend->device.pipelines_pool.objects[ info->pipeline_handle ];
+	if( state.current_pipeline != info->pipeline_handle )
 	{
-		auto &buffer = backend->object_pool.buffers[ info->vertex_buffers[ i ].buffer_handler ];
-		buffers.push( buffer.getHandle() );
-		offsets.push( info->vertex_buffers[ i ].offset );
+		state.current_pipeline = info->pipeline_handle;
+		graphics_cmd.bindGraphicsPipeline( pipeline.handle );
+		vkCmdPushConstants( graphics_cmd.getHandle() , pipeline.pipeline_layout , VK_SHADER_STAGE_VERTEX_BIT , 16 , 64 , state.view_proj._data );
 	}
-	vkCmdBindVertexBuffers( backend->cmd_buf.getHandle() , 0 , buffers.size , &buffers[ 0 ] , &offsets[ 0 ] );
-	vkCmdBindIndexBuffer( backend->cmd_buf.getHandle() , backend->object_pool.buffers[ info->index_buffer.buffer_handler ].getHandle() , info->index_buffer.offset , VK::getVK( info->index_type ) );
-	vkCmdDrawIndexed( backend->cmd_buf.getHandle() , info->index_count , info->instance_count , info->start_index , info->vertex_offset, info->start_instance );
+	auto &buffer = backend->device.buffer_pool.objects[ info->vertex_buffer.buffer_handler ];
+	VkDeviceSize offset = info->vertex_buffer.offset;
+	vkCmdBindVertexBuffers( graphics_cmd.getHandle() , 0 , 1 , &buffer.handle , &offset );
+	vkCmdBindIndexBuffer( graphics_cmd.getHandle() , backend->device.buffer_pool.objects[ info->index_buffer.buffer_handler ].handle , info->index_buffer.offset , VK::getVK( info->index_type ) );
+	vkCmdPushConstants( graphics_cmd.getHandle() , pipeline.pipeline_layout , VK_SHADER_STAGE_VERTEX_BIT , 0 , 16 , info->rotation.__data );
+	vkCmdDrawIndexed( graphics_cmd.getHandle() , info->index_count , 1 , info->start_index , 0 , 0 );
 }
 namespace Graphics
 {
-	void CommandBuffer::drawIndexed( DrawMeshInfo const *info )
+	void CommandQueue::drawIndexed( DrawMeshInfo const &info )
 	{
-		VKInterface::CommandBuffer* thisvk = ( VKInterface::CommandBuffer* )this;
-		thisvk->draw_calls.push( VKInterface::DrawCallInfo{ info , drawIndexedDispatch , uint( info->normalized_distance_from_camera * 0xffff ) } );
+		VKInterface::CommandQueue* thisgl = ( VKInterface::CommandQueue* )this;
+		DrawMeshInfo *swap_desc = ( DrawMeshInfo* )thisgl->temp_allocator.alloc( sizeof( DrawMeshInfo ) );
+		Allocator::copy( swap_desc , &info );
+		thisgl->commands.push( VKInterface::Command{ drawIndexedDispatch , swap_desc } );
 	}
-	void *CommandBuffer::allocate( uint size )
+	/*void *CommandBuffer::allocate( uint size )
 	{
 		VKInterface::CommandBuffer* thisvk = ( VKInterface::CommandBuffer* )this;
 		if( !thisvk->linear_allocator )
@@ -49,8 +51,10 @@ namespace Graphics
 		thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ].allocator = thisvk->allocator;
 		thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ].draw_calls.setAllocator( thisvk->allocator );
 		return ( CommandBuffer * )&thisvk->buffers_per_pass[ thisvk->buffers_per_pass.size - 1 ];
-	}
-	void createBufferDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
+	}*/
+	void createBufferDispatch( VKInterface::RenderingBackend *backend , VKInterface::GraphicsState &state ,
+		VK::CommandBuffer const &graphics_cmd , VK::CommandBuffer const &transfer_cmd ,
+		uint transfer_queue_index , void *data )
 	{
 		auto *info = ( BufferCreateInfo* )data;
 		VkBufferUsageFlags usage_flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -61,21 +65,70 @@ namespace Graphics
 		{
 			usage_flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 		}
-		VK::Buffer buffer = VK::Buffer::create( backend->device , usage_flags , &backend->dev_mem , info->size );
+		VK::Buffer buffer = backend->device.createBuffer( usage_flags , VK::MemoryType::DEV_BUFFER , info->size ).value;
 		if( info->data )
 		{
-			VK::Buffer *stage_buffer = ( VK::Buffer* )info->data;
-			backend->cmd_buf.begin();
-			backend->cmd_buf.copy( buffer , *stage_buffer , stage_buffer->getSize() );
-			backend->cmd_buf.end();
-			backend->graphics_queue.submitCommandBuffer( backend->cmd_buf );
-			backend->graphics_queue.wait();
-			stage_buffer->~Buffer();
-			backend->allocator->free( info->data );
+			auto tmp_buf_desc = backend->device.createBuffer( VK_BUFFER_USAGE_TRANSFER_SRC_BIT , VK::MemoryType::HOST , info->size );
+			VK::Buffer tmp_buf = tmp_buf_desc.value;
+			auto map = backend->device.map( tmp_buf );
+			memcpy( map , info->data , info->size );
+			backend->device.unmap( tmp_buf );
+			transfer_cmd.begin();
+			transfer_cmd.copy( buffer , tmp_buf , { 0 , 0 , info->size } );
+			transfer_cmd.end();
+			backend->device.submitGraphicsCommandBuffer( transfer_queue_index , transfer_cmd );
+			backend->device.waitIdleGraphics( transfer_queue_index );
+			backend->device.releaseBuffer( tmp_buf_desc.key );
 		}
-		backend->object_pool.buffers.push( std::move( buffer ) );
 	}
-	void createTextureDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
+	void createPipelineDispatch( VKInterface::RenderingBackend *backend , VKInterface::GraphicsState &state ,
+		VK::CommandBuffer const &graphics_cmd , VK::CommandBuffer const &transfer_cmd ,
+		uint transfer_queue_index , void *data )
+	{
+		auto *info = ( PipelineCreateInfo* )data;
+		VkPipelineColorBlendAttachmentState blender_state;
+		VkPipelineColorBlendStateCreateInfo blend_state_create_info;
+		{
+			Allocator::zero( &blender_state );
+			blender_state.blendEnable = VK_FALSE;
+			blender_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			blender_state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+			blender_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			blender_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			blender_state.colorBlendOp = VK_BLEND_OP_ADD;
+			blender_state.alphaBlendOp = VK_BLEND_OP_ADD;
+			blender_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+			Allocator::zero( &blend_state_create_info );
+			blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			blend_state_create_info.logicOp = VK_LOGIC_OP_COPY;
+			blend_state_create_info.attachmentCount = 1;
+			blend_state_create_info.pAttachments = &blender_state;
+		}
+		LocalArray< VkVertexInputBindingDescription , 10 > attrib_binding_infos = {};
+		LocalArray< VkVertexInputAttributeDescription , 10 > attrib_infos = {};
+		uint stride = 0;
+		for( auto attrib_info : info->attributes )
+		{
+			attrib_infos.push(
+			{
+				( uint )attrib_info.slot , 0 ,
+				VK::getVK( attrib_info.component_mapping ) , stride
+			}
+			);
+			stride += getBpp( attrib_info.component_mapping );
+		}
+		attrib_binding_infos.push( { 0 , stride , VK_VERTEX_INPUT_RATE_VERTEX } );
+		auto pipeline = backend->device.createPipeline( backend->opaque_pass.pass , 0 ,
+		{ 2 , backend->device.shader_module_pool.objects[ 0 ] , backend->device.shader_module_pool.objects[ 1 ] } ,
+		{ 0 ,{ 1 ,{ { 0 , VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER , 1 , VK_SHADER_STAGE_ALL } } } } ,
+		{ 1 ,{ VK_SHADER_STAGE_VERTEX_BIT , 0 , 80 } } ,
+			attrib_binding_infos ,
+			attrib_infos  ,
+			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST , blend_state_create_info
+		).value;
+	}
+	/*void createTextureDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
 	{
 		auto *info = ( TextureCreateInfo* )data;
 		VK::Image texture_image = VK::Image::create(
@@ -145,22 +198,6 @@ namespace Graphics
 		thisgl->creation_queue.push( { descp , createShaderDispatch , new_handler } );
 		return new_handler;
 	}
-	uint RenderingBackend::createBuffer( BufferCreateInfo desc )
-	{
-		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
-		auto *descp = thisgl->allocator->alloc< BufferCreateInfo >();
-		Allocator::copy( descp , &desc , 1 );
-		uint new_handler = thisgl->object_pool.buffer_counter++;
-		if( desc.data )
-		{
-			VK::Buffer *tmp_buffer = thisgl->allocator->alloc< VK::Buffer >();
-			new( tmp_buffer ) VK::Buffer();
-			*tmp_buffer = VK::Buffer::create( thisgl->device , VK_BUFFER_USAGE_TRANSFER_SRC_BIT , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT , desc.size , desc.data );
-			descp->data = tmp_buffer;
-		}
-		thisgl->creation_queue.push( { descp , createBufferDispatch , new_handler } );
-		return new_handler;
-	}
 	uint RenderingBackend::createTexture( TextureCreateInfo info )
 	{
 		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
@@ -218,8 +255,37 @@ namespace Graphics
 	{
 		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
 		return thisgl->ready_flag.isSet();
+	}*/
+	uint CommandQueue::createBuffer( BufferCreateInfo const &desc )
+	{
+		VKInterface::CommandQueue* thisgl = ( VKInterface::CommandQueue* )this;
+		void *swap = thisgl->temp_allocator.alloc( desc.size );
+		memcpy( swap , desc.data , desc.size );
+		BufferCreateInfo *swap_desc = ( BufferCreateInfo* )thisgl->temp_allocator.alloc( sizeof( BufferCreateInfo ) );
+		Allocator::copy( swap_desc , &desc );
+		swap_desc->data = swap;
+		thisgl->commands.push( VKInterface::Command{ createBufferDispatch , swap_desc } );
+		return thisgl->device->buffer_pool.counter++;
 	}
-	void RenderingBackend::wait()
+	uint CommandQueue::createPipeline( PipelineCreateInfo const &desc )
+	{
+		VKInterface::CommandQueue* thisgl = ( VKInterface::CommandQueue* )this;
+		PipelineCreateInfo *swap_desc = ( PipelineCreateInfo* )thisgl->temp_allocator.alloc( sizeof( PipelineCreateInfo ) );
+		Allocator::copy( swap_desc , &desc );
+		thisgl->commands.push( VKInterface::Command{ createPipelineDispatch , swap_desc } );
+		return thisgl->device->pipelines_pool.counter++;
+	}
+	CommandQueue *RenderingBackend::createCommandQueue()
+	{
+		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
+		auto cmd_queue = thisgl->allocator->alloc< VKInterface::CommandQueue >();
+		Allocator::zero( cmd_queue );
+		cmd_queue->device = &thisgl->device;
+
+		cmd_queue->temp_allocator = std::move( LinearAllocator( 4000 ) );
+		return cmd_queue;
+	}
+	void RenderingBackend::waitIdle()
 	{
 		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
 		//if( !ready_flag.isSet() )
@@ -228,10 +294,16 @@ namespace Graphics
 		}
 		thisgl->ready_signal.reset();
 	}
-	void RenderingBackend::render( CommandPool *cmd_pool )
+	void RenderingBackend::submitCommandQueue( CommandQueue *queue )
 	{
 		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
-		thisgl->current_command_pool = ( VKInterface::CommandPool* ) cmd_pool;
+
+		thisgl->swap_command_queues.push( ( VKInterface::CommandQueue* )queue );
+	}
+	void RenderingBackend::render()
+	{
+		VKInterface::RenderingBackend* thisgl = ( VKInterface::RenderingBackend* )this;
+
 		thisgl->render_signal.signal();
 	}
 }
@@ -255,7 +327,7 @@ namespace OS
 			rvk->mainloop();
 		} , Allocator::singleton
 		);
-		rvk->wait();
+		rvk->waitIdle();
 		return rvk;
 	}
 }
@@ -263,19 +335,19 @@ namespace VKInterface
 {
 	void RenderingBackend::mainloop()
 	{
-		instance = VK::Instance::create();
-		device = VK::Device::createGraphicsDevice( instance );
-		swap_chain = VK::SwapChain::create( instance , device , object_pool , 2 , *this->wnd );
+		auto instance = VK::Instance::create();
+		device = VK::Device::createGraphicsDevice( instance , 2 , 1 );
+		auto swap_chain = VK::SwapChain::create( instance.getHandle() , instance.getPhysicalDevice().getHandle() , device.getHandle() , 2 , *this->wnd );
 		
 		
-		auto render_semaphore = device.createSemaphore();
-		auto present_semaphore = device.createSemaphore();
+		auto render_semaphore = device.createSemaphore().value;
+		auto present_semaphore = device.createSemaphore().value;
 
 		FileConsumer *local_consumer = Allocator::singleton->alloc< FileConsumer >();
 		new( local_consumer ) FileConsumer();
 		Pointers::Unique< FileConsumer > local_file_consumer( local_consumer , Allocator::singleton );
-		String vert_filename = "shaders/vk/vert.spv";
-		String frag_filename = "shaders/vk/frag.spv";
+		String vert_filename = "shaders/vk/simple.vert.spv";
+		String frag_filename = "shaders/vk/simple.frag.spv";
 		FileManager::singleton->loadFile( { frag_filename , vert_filename } , local_file_consumer.get() );
 		Shared< FileImage > frag_file , vert_file;
 		int files = 2;
@@ -294,11 +366,55 @@ namespace VKInterface
 		}
 		//object_pool.shader_modules.push( device.createShaderModule( vert_file->getView().getRaw() , vert_file->getView().getLimit() ) );
 		//object_pool.shader_modules.push( device.createShaderModule( frag_file->getView().getRaw() , frag_file->getView().getLimit() ) );
-		cmd_pool = VK::CommandPool::create( device , device.getGraphicsQueueFamily() );
-		cmd_buf = cmd_pool.createCommandBuffer();
-		graphics_queue = VK::Queue::createGraphicsQueue( device );
-		dev_mem = VK::Memory::create( device , 0x10000 , device.getPhysicalDevice().getMemoryIndex( 29 , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT ) );
-		dev_texture_mem = VK::Memory::create( device , 0x1000000 , device.getPhysicalDevice().getMemoryIndex( 258 , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT ) );
+		
+		auto cmd_pool = VK::CommandPool::create( device.getHandle() , device.getPhysicalDevice().getGraphicsQueueFamily() );
+		auto graphics_cmd = cmd_pool.createPrimaryCommandBuffer();
+		auto transfer_cmd = cmd_pool.createPrimaryCommandBuffer();
+		struct RenderTarget
+		{
+			VK::Image image;
+			VK::ImageView view;
+		};
+		RenderTarget rt;
+		rt.image = device.createImage2D(
+			512 , 512 , 1 , 1 , VK_IMAGE_LAYOUT_PREINITIALIZED , VK_FORMAT_B8G8R8A8_UNORM ,
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+		).value;
+		rt.view = device.createView2D( rt.image ).value;
+		VK::PassInfo pass_info = {};
+		pass_info.subpasses.push( { 1 , { VK::defaultAttachmentRef( 0 ) } } );
+		pass_info.attachments.push( VK::defaultAttachmentDesc( rt.view.format ) );
+		opaque_pass.pass = device.createGraphicsRenderPass( pass_info ).value;
+		opaque_pass.frame_buffer = device.createFrameBuffer( opaque_pass.pass , { 1 , rt.view.handle } , { 512 , 512 } ).value;
+		auto vertex_module = device.createShaderModule( vert_file->getView().getRaw() , vert_file->getView().getLimit() , VK_SHADER_STAGE_VERTEX_BIT ).value;
+		auto fragment_module = device.createShaderModule( frag_file->getView().getRaw() , frag_file->getView().getLimit() , VK_SHADER_STAGE_FRAGMENT_BIT ).value;
+		
+		/*float vertices[] =
+		{
+			-1.0f , -1.0f , 0.0f , 0.0f , 0.0f ,
+			1.0f , -1.0f , 0.0f , 1.0f , 0.0f ,
+			1.0f , 1.0f , 0.0f , 1.0f , 1.0f ,
+			-1.0f , 1.0f , 0.0f , 0.0f , 1.0f
+		};
+		uint indices[] =
+		{
+			0 , 1 , 2 , 0 , 2 , 3
+		};
+		auto vb = device.createBuffer( VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT , VK::MemoryType::DEV_BUFFER , sizeof( vertices ) ).value;
+		auto ib = device.createBuffer( VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT , VK::MemoryType::DEV_BUFFER , sizeof( vertices ) ).value;
+		auto tmpb = device.createBuffer( VK_BUFFER_USAGE_TRANSFER_SRC_BIT , VK::MemoryType::HOST , 256 ).value;
+		{
+			auto map = device.map( tmpb );
+			memcpy( map , vertices , sizeof( vertices ) );
+			memcpy( ( byte* )map + sizeof( vertices ) , indices , sizeof( indices ) );
+			device.unmap( tmpb );
+			graphics_cmd.begin();
+			graphics_cmd.copy( vb , tmpb , { 0 , 0 , sizeof( vertices ) } );
+			graphics_cmd.copy( ib , tmpb , { sizeof( vertices ) , 0 , sizeof( indices ) } );
+			graphics_cmd.end();
+			device.submitGraphicsCommandBuffer( 0 , graphics_cmd );
+			device.waitIdleGraphics( 0 );
+		}*/
 		/*auto blitimage = */
 		/*Graphics::RenderTargetInfo rtinfo;
 		Graphics::ComponentMapping mapping;
@@ -404,25 +520,114 @@ namespace VKInterface
 		timer.updateTime();
 		while( working_flag.isSet() )
 		{
-			timer.updateTime();
-			while( !creation_queue.isEmpty() )
+			for( auto &cmd : swap_command_queues )
 			{
-				auto p = creation_queue.pop();
-				p.dispatch( this , p.data , p.handler );
-				allocator->free( p.data );
+				current_command_queues.push( cmd );
 			}
-			swap_chain.acquireNextImage( *present_semaphore );
+			swap_command_queues.size = 0;
+			timer.updateTime();
+			swap_chain.acquireNextImage( present_semaphore );
 			//OS::IO::debugLogln( "current image index " , swap_chain.getCurrentImageIndex() );
-			cmd_buf.begin();
-			auto &attachment = object_pool.attachments[ swap_chain.getCurrentImageIndex() ];
-			
-			cmd_buf.ImageBarrier( attachment.getImage() ,
+			//cmd_buf.begin();
+			auto &attachment = swap_chain.getCurrentAttachment();
+			graphics_cmd.begin();
+			graphics_cmd.ImageBarrier( attachment ,
 			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
-				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT , VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT ,
+				VK_ACCESS_COLOR_ATTACHMENT_READ_BIT , VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			);
-			cmd_buf.clearImage( attachment.getImage() , { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } , { 0.7f , 0.4f , 0.32f , 1.0f } );
+			graphics_cmd.clearImage( attachment , { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } , { 0.7f , 0.4f , 0.32f , 1.0f } );
 			
-			if( current_command_pool )
+			graphics_cmd.ImageBarrier( rt.image ,
+			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT ,
+				VK_ACCESS_COLOR_ATTACHMENT_READ_BIT , VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			);
+			graphics_cmd.clearImage( rt.image , { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } , { 0.6f , 0.15f , 0.23f , 1.0f } );
+			VkClearValue clear_values[ 1 ] = { {0.0f , 1.0f , 0.0f , 1.0f} };
+			graphics_cmd.beginPass( opaque_pass.pass , opaque_pass.frame_buffer , { 0 , 0 , 512 , 512 } , clear_values , 1 );
+			
+			//vkCmdSetLineWidth( graphics_cmd.getHandle() , 1.0f );
+			VkRect2D scissors[] =
+			{
+				{ 0 , 0 , 512 , 512 }
+			};
+			vkCmdSetScissor( graphics_cmd.getHandle() , 0 , 1 , scissors );
+			VkViewport viewports[] =
+			{
+				{ 0 , 0 , 512 , 512 }
+			};
+			vkCmdSetViewport( graphics_cmd.getHandle() , 0 , 1 , viewports );
+
+			//VkDeviceSize offset = 0;
+			//vkCmdBindVertexBuffers( graphics_cmd.getHandle() , 0 , 1 , &vb.handle , &offset );
+			//vkCmdBindIndexBuffer( graphics_cmd.getHandle() , ib.handle , 0 , VK_INDEX_TYPE_UINT32 );
+			//vkCmdDrawIndexed( graphics_cmd.getHandle() , 6 , 1 , 0 , 0 , 0 );
+			//vkCmdDraw( graphics_cmd.getHandle() , 4 , 1 , 0 , 0 );
+			//vkCmdSetStencilCompareMask( graphics_cmd.getHandle() , VK_STENCIL_FACE_FRONT_BIT , VK_STENCIL_OP_KEEP );
+			//vkCmdSetStencilWriteMask( graphics_cmd.getHandle() , VK_STENCIL_FACE_FRONT_BIT , VK_STENCIL_OP_KEEP );
+			//vkCmdSetStencilReference( graphics_cmd.getHandle() , VK_STENCIL_FACE_FRONT_BIT , VK_STENCIL_OP_KEEP );
+
+			auto view_proj = Camera::perspectiveLookAt( { 2.0f , 2.0f , 2.0f } , { 0.0f , 0.0f , 0.0f } , { 0.0f , 0.0f , -1.0f } , 0.1f , 1000.0f , 1.0f , 1.0f );
+			
+			/*LocalArray< VkWriteDescriptorSet , 10 > write_desc;
+			ito( info->uniform_buffers.size )
+			{
+				auto &buffer = backend->object_pool.buffers[ info->uniform_buffers[ i ].buffer_handler ];
+				VkWriteDescriptorSet write_buffer_desc;
+				Allocator::zero( &write_buffer_desc );
+				write_buffer_desc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write_buffer_desc.dstSet = current_pass->getDescriptorSet( 0 );
+				write_buffer_desc.descriptorCount = 1;
+				write_buffer_desc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+				VkDescriptorBufferInfo buf_info;
+				Allocator::zero( &buf_info );
+				buf_info.buffer = buffer.getHandle();
+				buf_info.offset = 0;// info->uniform_buffers[ i ].offset;
+				ub_offsets.push( info->uniform_buffers[ i ].offset );
+				buf_info.range = current_pass->getConstantsLayout()[ i ].range;
+				write_buffer_desc.pBufferInfo = &buf_info;
+				write_buffer_desc.dstBinding = current_pass->getConstantsLayout()[ i ].location;
+				write_desc.push( write_buffer_desc );
+			}
+			if( write_desc.size )
+			{
+				vkUpdateDescriptorSets( backend->device.getHandle() , write_desc.size , &write_desc[ 0 ] , 0 , NULL );
+				auto dset = current_pass->getDescriptorSet( 0 );
+				vkCmdBindDescriptorSets( backend->cmd_buf.getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , current_pass->getPipelineLayout() , 0 , 1 , &dset , ub_offsets.size , &ub_offsets[ 0 ] );
+			}*/
+			GraphicsState state{ view_proj , -1 };
+			for( auto &cmd_buf : current_command_queues )
+			{
+				for( auto &cmd : cmd_buf->commands )
+				{
+					cmd.dispatch( this , state , graphics_cmd , transfer_cmd , 1 , cmd.data );
+				}
+				cmd_buf->~CommandQueue();
+				allocator->free( cmd_buf );
+			}
+			graphics_cmd.endPass();
+			current_command_queues.size = 0;
+			VkImageBlit blit_info;
+			Allocator::zero( &blit_info );
+			blit_info.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 0 , 1 };
+			blit_info.dstOffsets[ 1 ] = { 512 , 512 , 0 };
+			blit_info.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 0 , 1 };
+			blit_info.srcOffsets[ 1 ] = { 512 , 512 , 0 };
+
+			graphics_cmd.ImageBarrier( rt.image ,
+			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT ,
+				VK_ACCESS_TRANSFER_READ_BIT , VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			);
+			graphics_cmd.ImageBarrier( attachment ,
+			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT ,
+				VK_ACCESS_TRANSFER_WRITE_BIT , VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			);
+
+			graphics_cmd.blit( attachment , rt.image , &blit_info , 1 , VK_FILTER_NEAREST );
+			/*if( current_command_pool )
 			{
 				auto &blit_src = object_pool.attachments[ 2 ];
 				cmd_buf.ImageBarrier( blit_src.getImage() ,
@@ -437,7 +642,7 @@ namespace VKInterface
 				{
 					for( auto const &cmd : cmd_buf.draw_calls )
 					{
-						cmd.dispatch( this , cmd.data );
+						cmd.dispatch( this , &pass , cmd.data );
 					}
 				}
 				cmd_buf.endPass();
@@ -455,28 +660,6 @@ namespace VKInterface
 					VK_ACCESS_TRANSFER_WRITE_BIT , VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 				);
 
-				/*{
-				cmd_buf.ImageBarrier( blit_src.getImage() ,
-				{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
-				VK_ACCESS_TRANSFER_WRITE_BIT , VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-				);
-				VkBufferImageCopy copy_range;
-				Allocator::zero( &copy_range );
-				copy_range.imageExtent = { 512 , 512 , 1 };
-				copy_range.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 0 , 1 };
-				VK::Buffer tmp_buffer = VK::Buffer::create( device , VK_BUFFER_USAGE_TRANSFER_SRC_BIT , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT , 512 * 512 * 4 );
-				auto map = tmp_buffer.map();
-				Allocator::zero< byte >( ( byte* )map , 512 * 512 * 4 );
-				ito( 100 )
-				{
-				auto x = rand() % 512;
-				auto y = rand() % 512;
-				( ( uint* )map )[ y * 512 + x ] = 0xffffffff;
-				}
-				tmp_buffer.unmap();
-				//cmd_buf.copy( blit_src.getImage() , tmp_buffer , &copy_range , 1 );
-				}*/
-
 				cmd_buf.ImageBarrier( blit_src.getImage() ,
 				{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
 					VK_ACCESS_TRANSFER_READ_BIT , VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
@@ -485,7 +668,7 @@ namespace VKInterface
 				cmd_buf.blit( attachment.getImage() , blit_src.getImage() , &blit_info , 1 , VK_FILTER_NEAREST );
 				delete current_command_pool;
 				current_command_pool = nullptr;
-			}
+			}*/
 			
 			/*auto &pass = passes[ swap_chain.getCurrentImageIndex() ];
 			
@@ -541,13 +724,15 @@ namespace VKInterface
 			}
 			
 			drawIndexedDispatch( this , &draw_mesh_info );*/
-			cmd_buf.ImageBarrier( attachment.getImage() ,
+			graphics_cmd.ImageBarrier( attachment ,
 			{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } ,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT ,
 				VK_ACCESS_COLOR_ATTACHMENT_READ_BIT , VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 			);
-			cmd_buf.end();
-			graphics_queue.submitCommandBuffer( cmd_buf , *present_semaphore , *render_semaphore );
-			graphics_queue.present( swap_chain , *render_semaphore );
+			graphics_cmd.end();
+			device.submitGraphicsCommandBuffer( 0 , graphics_cmd , present_semaphore , render_semaphore );
+			device.present( 0 , swap_chain.getHandle() , swap_chain.getCurrentImageIndex() , render_semaphore );
+			device.waitIdleGraphics( 0 );
 //wait_section:
 			ready_flag.set();
 			ready_signal.signal();

@@ -10,16 +10,11 @@ namespace VK
 	{
 		VERTEX , FRAGMENT , GEOMETRY , TESSELATION_CONTROL , TESSELATION_EVAL
 	};
-	struct ShaderIn
-	{
-		uint location;
-		uint binding;
-	};
 	inline String getTypeRepr( Graphics::Shaders::Type type )
 	{
 		static String repr[] =
 		{
-			"void" , "float" , "vec2" , "vec3" , "vec4" , "int" , "ivec2" , "ivec3" , "ivec4"
+			"void" , "float" , "vec2" , "vec3" , "vec4" , "int" , "ivec2" , "ivec3" , "ivec4" , "mat4" , "mat3"
 		};
 		return repr[ ( uint )type ];
 	}
@@ -136,8 +131,7 @@ namespace VK
 		VK_OBJECT( Shader );
 	private:
 		LocalArray< Stage , 5 > stages;
-		LocalArray< ShaderIn , 20 > constants;
-		LocalArray< ShaderIn , 20 > attributes;
+		LocalArray< uint , 10 > uniform_blocks;
 		LocalArray< uint , 10 > textures;
 	public:
 		static Shader create( Device const &device , Graphics::ShaderCreateInfo const &info )
@@ -149,14 +143,18 @@ namespace VK
 				OS::IO::debugLogln( shader_text );
 				String ext = ".vert";
 				Stage stage;
+				for( auto const &cb : stage_info.value.constant_blocks )
+				{
+					out.uniform_blocks.push( cb.binding );
+				}
+				for( auto const &txinfo : stage_info.value.textures2d )
+				{
+					out.textures.push( txinfo.key );
+				}
 				if( stage_info.key == Graphics::StageType::VERTEX )
 				{
 					ext = ".vert";
 					stage.stage_flag = VK_SHADER_STAGE_VERTEX_BIT;
-					for( auto const &attr : stage_info.value.in )
-					{
-						out.attributes.push( { attr.get< 0 >() , 0 } );
-					}
 					/*for( auto const &attr : stage_info.value.in )
 					{
 						out.attributes.push( { attr.get< 0 >() , 0 } );
@@ -199,10 +197,16 @@ namespace VK
 			{
 				out += "layout( binding = " + String( expr.key ) + " ) uniform sampler2D " + expr.value + ";\n";
 			} );
-			stage_info.constants.foreach( [ &out ]( auto const &expr )
+			for( auto const &cb : stage_info.constant_blocks )
 			{
-				out += "layout( binding = " + Graphics::Shaders::getTypeRepr( expr.key ) + " ) uniform " + expr.value + ";\n";
-			} );
+				out += "layout( std140 , set = 0 , binding = " + String( cb.binding ) + " ) uniform " + cb.name + "TYPE\n{\n";
+				cb.constants.foreach( [ &out ]( auto const &expr )
+				{
+					out += VK::getTypeRepr( expr.key ) + " " + expr.value + ";\n";
+				} );
+				out += "} " + cb.name + ";\n";
+			}
+			
 			stage_info.functions.foreach( [ &out ]( auto const &expr )
 			{
 				out += VK::getFuncRepr( expr );
@@ -210,21 +214,13 @@ namespace VK
 			out += VK::getFuncRepr( stage_info.body );
 			return out;
 		}
-		auto const &getAttribures() const
-		{
-			return attributes;
-		}
 		auto const &getStages() const
 		{
 			return stages;
 		}
 		auto const &getConstants() const
 		{
-			return constants;
-		}
-		auto const &getTextures() const
-		{
-			return textures;
+			return uniform_blocks;
 		}
 	};
 }

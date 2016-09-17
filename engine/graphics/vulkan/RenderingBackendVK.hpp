@@ -2,13 +2,10 @@
 #pragma once
 #pragma once
 #include <engine/graphics/Graphics.hpp>
-#include <engine/graphics/vulkan/defines.hpp>
 #include <engine/data_struct/Buffer.hpp>
 #include <engine/data_struct/Tuple.hpp>
-#include <engine/graphics/vulkan/Queue.hpp>
 #include <engine/graphics/vulkan/CommandBuffer.hpp>
-#include <engine/graphics/vulkan/ObjectPool.hpp>
-#include <engine/graphics/vulkan/Pass.hpp>
+#include <engine/graphics/vulkan/Device.hpp>
 #include <engine/os/Window.hpp>
 namespace VKInterface
 {
@@ -17,38 +14,28 @@ namespace VKInterface
 	using namespace OS::Async;
 	using namespace LockFree;
 	class RenderingBackend;
-	struct DrawCallInfo
+	struct GraphicsState
 	{
-		void const *data;
-		void( *dispatch )( RenderingBackend* , void const * );
-		uint64_t key;
+		f4x4 view_proj;
+		int current_pipeline;
 	};
-	class CommandBuffer : public Graphics::CommandBuffer
+	struct Command
 	{
-	public:
-		Allocator *allocator;
-		Array< DrawCallInfo > draw_calls;
-		Pointers::Unique< LinearAllocator > linear_allocator;
-		~CommandBuffer() = default;
-	};
-	class CommandPool : public Graphics::CommandPool
-	{
-	public:
-		Allocator *allocator = Allocator::singleton;
-		LocalArray< CommandBuffer , 100 > buffers_per_pass;
-		uint pass_handler;
-		~CommandPool() = default;
-	};
-	struct CreationDesc
-	{
+		void( *dispatch )( RenderingBackend * , GraphicsState & , VK::CommandBuffer const & ,
+			VK::CommandBuffer const & , uint , void * );
 		void *data;
-		void( *dispatch )( RenderingBackend* , void* , uint );
-		uint handler;
 	};
+	struct CommandQueue : public Graphics::CommandQueue
+	{
+		VK::Device *device;
+		LinearAllocator temp_allocator;
+		LocalArray< Command , 1000 > commands;
+		~CommandQueue() = default;
+	};
+	
 	class RenderingBackend : public Graphics::RenderingBackend
 	{
 		friend class Window;
-		
 	public:
 		VK_OBJECT( RenderingBackend );
 #ifdef _WIN32
@@ -62,20 +49,15 @@ namespace VKInterface
 		Signal render_signal = Signal( false );
 		Allocators::Allocator *allocator;
 		OS::Window *wnd;
+		LocalArray< CommandQueue* , 10 > current_command_queues;
+		LocalArray< CommandQueue* , 10 > swap_command_queues;
 		VK::Device device;
-		VK::Instance instance;
-		VK::SwapChain swap_chain;
-		VK::Memory dev_mem;
-		VK::Memory dev_texture_mem;
-		VK::Memory host_mem;
-		VK::CommandPool cmd_pool;
-		VK::CommandBuffer cmd_buf;
-		VK::Queue graphics_queue;
-		VK::ObjectPool object_pool;
-		CommandPool *current_command_pool = nullptr;
-		LocalArray< VK::Pass , 1000 > passes;
-		//RingBuffer< CommandPool* , 20 > command_queue;
-		RingBuffer< CreationDesc , 1000 > creation_queue;
+		struct
+		{
+			VkRenderPass pass;
+			VkFramebuffer frame_buffer;
+		} opaque_pass;
 		void mainloop();
+		void release();
 	};
 }

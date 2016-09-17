@@ -91,7 +91,7 @@ public:
 		object( obj )
 	{
 	}
-	virtual void render( Object *object , Graphics::CommandBuffer &cmd_buffer ) = 0;
+	//virtual void render( Object *object , Graphics::CommandBuffer &cmd_buffer ) = 0;
 	virtual AABB getBound() const = 0;
 	virtual ~GraphicsComponent() {};
 };

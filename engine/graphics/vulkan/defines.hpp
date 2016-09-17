@@ -15,6 +15,10 @@ namespace VK
 {
 	using namespace Allocators;
 	using namespace Collections;
+	enum class MemoryType : uint
+	{
+		HOST , DEV_BUFFER , DEV_TEXTURE
+	};
 	inline VkIndexType getVK( Graphics::IndexType type )
 	{
 		static VkIndexType _vk[] =
@@ -171,6 +175,20 @@ namespace VK
 				return VK_FORMAT_R8G8B8_UNORM;
 			case Graphics::ComponentType::UNORM16:
 				return VK_FORMAT_R16G16B16_UNORM;
+			case Graphics::ComponentType::FLOAT32:
+				return VK_FORMAT_R32G32B32_SFLOAT;
+			}
+		case Graphics::ComponentFormat::RG:
+			switch( mapping.type )
+			{
+			case Graphics::ComponentType::BYTE:
+				return VK_FORMAT_R8G8_UINT;
+			case Graphics::ComponentType::UNORM8:
+				return VK_FORMAT_R8G8_UNORM;
+			case Graphics::ComponentType::UNORM16:
+				return VK_FORMAT_R16G16_UNORM;
+			case Graphics::ComponentType::FLOAT32:
+				return VK_FORMAT_R32G32_SFLOAT;
 			}
 		case Graphics::ComponentFormat::RGBA:
 			switch( mapping.type )

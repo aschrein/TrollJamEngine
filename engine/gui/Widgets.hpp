@@ -51,7 +51,7 @@ namespace GUI
 			isfocused = f;
 		}
 		virtual void consumeInput( OS::InputState::Event & ) = 0;
-		virtual void update( Graphics::CommandBuffer & , float dt ) = 0;
+		//virtual void update( Graphics::CommandBuffer & , float dt ) = 0;
 		int4 getRect() const
 		{
 			return rect;

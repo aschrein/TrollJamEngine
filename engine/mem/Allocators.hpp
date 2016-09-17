@@ -74,13 +74,35 @@ namespace Allocators
 	public:
 		~LinearAllocator()
 		{
-			_aligned_free( base_ptr );
+			if( base_ptr )
+			{
+				_aligned_free( base_ptr );
+			}
+			base_ptr = nullptr;
+			size = 0;
+			cur_pos = 0;
 		}
 		int getPosition() const
 		{
 			return cur_pos;
 		}
 		LinearAllocator() = default;
+		LinearAllocator( LinearAllocator const & ) = delete;
+		LinearAllocator &operator=( LinearAllocator const & ) = delete;
+		LinearAllocator( LinearAllocator &&val )
+		{
+			*this = std::move( val );
+		}
+		LinearAllocator &operator=( LinearAllocator &&val )
+		{
+			this->~LinearAllocator();
+			base_ptr = val.base_ptr;
+			size = val.size;
+			cur_pos = val.cur_pos;
+			val.base_ptr = nullptr;
+			val.~LinearAllocator();
+			return *this;
+		}
 		LinearAllocator( int pages ) :
 			size( pages * 4096 )
 		{

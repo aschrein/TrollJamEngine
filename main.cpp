@@ -14,7 +14,7 @@ uint texture_handle = 0;
 FileManager *FileManager::singleton;
 DrawMeshInfo monkey_head_mesh;
 DrawMeshInfo plane_mesh;
-int main( int argc , char ** argv )
+int main( int argc , char **argv )
 {
 	using namespace OS;
 	Unique< FileConsumer > local_file_consumer( new FileConsumer() );
@@ -32,56 +32,34 @@ int main( int argc , char ** argv )
 	uint index_buffer_handler;
 	uint render_target_handler;
 	uint pass_handler;
+	uint uniform_buffer_handler;
+	uint uniform_buffer_handler1;
+	uint pipeline_handler;
 	LockFree::RingBuffer< Pair< OS::InputState::State , OS::InputState::EventType > , 100 > input_events;
 	OS::Window window = OS::Window( { 100 , 100 , 512 , 512 ,
 		[ & ]()
 	{
 		renderer = window.createRenderingBackend();
-		using namespace Shaders;
-		constexpr size_t t = sizeof( Token );
-		constexpr size_t s = sizeof( Expr );
-		Token in_pos( "in_pos" );
-		Stage vertex_stage;
-		vertex_stage.addIn( 0 , Type::FLOAT3 , in_pos );
-		vertex_stage.getBody().addExpr( Expr::setVertexPos( Expr::createFloat4( in_pos , { 1.0 } ) ) );
-		Stage fragment_stage;
-		Token out_color( "out_color" );
-		fragment_stage.addOut( 0 , Type::FLOAT4 , out_color );
-		fragment_stage.getBody().addExpr( out_color << Expr::createFloat4( { 1.0 } , { 0.4 } , { 0.0 } , { 1.0 } ) );
-		shader_handler = renderer->createShader( { "simple" , {
-			Pair< StageType , Shaders::Stage >{ StageType::VERTEX , vertex_stage } ,
-			Pair< StageType , Shaders::Stage >{ StageType::FRAGMENT , fragment_stage } ,
-		} } );
+		auto cmd = renderer->createCommandQueue();
 		float vertices[] =
 		{
-			-1.0f , -1.0f , 0.0f ,
-			1.0f , -1.0f , 0.0f ,
-			1.0f , 1.0f , 0.0f ,
-			-1.0f , 1.0f , 0.0f
+			-1.0f , -1.0f , 0.0f , 0.0f , 0.0f ,
+			1.0f , -1.0f , 0.0f , 1.0f , 0.0f ,
+			1.0f , 1.0f , 0.0f , 1.0f , 1.0f ,
+			-1.0f , 1.0f , 0.0f , 0.0f , 1.0f
 		};
 		uint indices[] =
 		{
 			0 , 1 , 2 , 0 , 2 , 3
 		};
-		vertex_buffer_handler = renderer->createBuffer( { vertices , 48 , Usage::STATIC , BufferTarget::VERTEX_BUFFER } );
-		index_buffer_handler = renderer->createBuffer( { indices , 24 , Usage::STATIC , BufferTarget::INDEX_BUFFER } );
-		RenderTargetCreateInfo rtinfo;
-		rtinfo.component_mapping = { ComponentFormat::BGRA , ComponentType::UNORM8 };
-		rtinfo.size = { 512 , 512 };
-		render_target_handler = renderer->createRenderTarget( rtinfo );
-		PassCreateInfo pass_info;
-		Allocator::zero( &pass_info );
-		pass_info.render_targets.push( render_target_handler );
-		pass_info.shader_handler = shader_handler;
-		AttributeInfo attr_info;
-		Allocator::zero( &attr_info );
-		attr_info.buffer_index = 0;
-		attr_info.elem_count = 3;
-		attr_info.src_type = PlainFieldType::FLOAT32;
-		pass_info.vertex_attribute_layout.push( attr_info );
-		pass_info.vertex_buffer_binding_strides.push( 12 );
-		pass_handler = renderer->createPass( pass_info );
-		renderer->render( nullptr );
+		LocalArray< AttributeInfo , 10 > attrib_infos = {};
+		attrib_infos.push( { AttributeSlot::POSITION , { ComponentFormat::RGB , ComponentType::FLOAT32 } } );
+		attrib_infos.push( { AttributeSlot::TEXCOORD0 ,{ ComponentFormat::RG , ComponentType::FLOAT32 } } );
+		vertex_buffer_handler = cmd->createBuffer( { vertices , sizeof( vertices ) , Usage::STATIC , BufferTarget::INDEX_BUFFER } );
+		index_buffer_handler = cmd->createBuffer( { indices , sizeof( indices ) , Usage::STATIC , BufferTarget::INDEX_BUFFER } );
+		pipeline_handler = cmd->createPipeline( { attrib_infos } );
+		renderer->submitCommandQueue( cmd );
+		renderer->render();
 		init_signal.signal();
 	} ,
 		[]( int x , int y , int w , int h )
@@ -107,10 +85,10 @@ int main( int argc , char ** argv )
 		DrawMeshInfo mesh_info;
 		Allocator::zero( &mesh_info );
 		mesh_info.index_buffer = { index_buffer_handler , 0 };
-		mesh_info.vertex_buffers.push( { 0 , 0 } );
-		mesh_info.instance_count = 1;
-		mesh_info.index_count = 3;
-		
+		mesh_info.vertex_buffer = { vertex_buffer_handler , 0 };
+		mesh_info.index_count = 6;
+		mesh_info.pipeline_handle = pipeline_handler;
+		Timer timer;
 		while( true )
 		{
 			/*float3 camera_dir = float3{
@@ -237,13 +215,14 @@ int main( int argc , char ** argv )
 					cmd_buffer.push( { CommandType::DRAW_INDEXED_MESH , 0 , desc } );
 				}
 			}*/
-			renderer->wait();
-			auto cmd_pool = renderer->createCommandPool( pass_handler );
-			auto cmd = cmd_pool->createCommandBuffer();
-			cmd->drawIndexed( &mesh_info );
-			//OS::IO::debugLogln( "update thread woked up" );
-			//renderer->pushCommand( cmd_buffer );
-			renderer->render( std::move( cmd_pool ) );
+			renderer->waitIdle();
+			timer.updateTime();
+			auto cmd = renderer->createCommandQueue();
+			qf rotation( { 0.0f , 0.0f , 1.0f } , timer.getCurrentTimeMilis() * 1.0e-3f );
+			mesh_info.rotation = rotation;
+			cmd->drawIndexed( mesh_info );
+			renderer->submitCommandQueue( cmd );
+			renderer->render();
 		}
 	}
 	);

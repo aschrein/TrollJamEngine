@@ -19,10 +19,15 @@ namespace VK
 			VkQueueFamilyProperties queue_properties[ 10 ] = { 0 };
 			uint32_t queue_count;
 			uint32_t graphics_queue;
+			uint32_t compute_queue;
 		public:
 			uint32_t getGraphicsQueueFamily() const
 			{
 				return graphics_queue;
+			}
+			uint32_t getComputeQueueFamily() const
+			{
+				return compute_queue;
 			}
 			VkPhysicalDevice const &getHandle() const
 			{
@@ -89,6 +94,14 @@ namespace VK
 				if( pdev.queue_properties[ i ].queueFlags & VK_QUEUE_GRAPHICS_BIT )
 				{
 					pdev.graphics_queue = i;
+					break;
+				}
+			}
+			ito( pdev.queue_count )
+			{
+				if( pdev.queue_properties[ i ].queueFlags & VK_QUEUE_COMPUTE_BIT )
+				{
+					pdev.compute_queue = i;
 					break;
 				}
 			}

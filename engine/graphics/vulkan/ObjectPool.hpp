@@ -1,27 +1,37 @@
 #pragma once
 #include <engine/data_struct/Array.hpp>
-#include <engine/graphics/vulkan/Images.hpp>
-#include <engine/graphics/vulkan/Device.hpp>
-#include <engine/graphics/vulkan/Buffers.hpp>
-#include <engine/graphics/vulkan/Shader.hpp>
 namespace VK
 {
 	using namespace Collections;
+	template< typename T >
 	class ObjectPool
 	{
 	public:
 		Allocator *allocator;
-		Array< Image > textures;
-		uint texture_counter = 0;
-		Array< ImageView > views;
-		uint view_counter = 0;
-		Array< Buffer > buffers;
-		uint buffer_counter = 0;
-		Array< Attachment > attachments;
-		uint attachment_counter = 0;
-		Array< Unique< VkSampler > > samplers;
-		uint sampler_counter = 0;
-		Array< Shader > shaders;
-		uint shader_counter = 0;
+		Array< T > objects;
+		Array< uint > free_objects;
+		uint counter = 0;
+		uint push( T const &val )
+		{
+			auto tmp = val;
+			return push( std::move( tmp ) );
+		}
+		uint push( T &&val )
+		{
+			if( !free_objects.isEmpty() )
+			{
+				uint index = free_objects.pop();
+				objects[ index ] = std::move( val );
+				return index;
+			}
+			objects.push( std::move( val ) );
+			return objects.getSize() - 1;
+		}
+		T free( int i )
+		{
+			auto val = std::move( objects[ i ] );
+			free_objects.push( i );
+			return val;
+		}
 	};
 }

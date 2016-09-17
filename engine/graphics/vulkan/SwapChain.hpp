@@ -1,9 +1,8 @@
 #pragma once
-//#include <engine/graphics/vulkan/defines.hpp>
+#include <engine/graphics/vulkan/defines.hpp>
 //#include <engine/graphics/vulkan/Device.hpp>
 #include <engine/os/Window.hpp>
 #include <engine/graphics/vulkan/Images.hpp>
-#include <engine/graphics/vulkan/ObjectPool.hpp>
 #undef min
 #undef max
 namespace VK
@@ -23,7 +22,8 @@ namespace VK
 		} surface;
 		VkDevice dev_raw;
 		Unique< VkSwapchainKHR > handle;
-		//LocalArray< Attachment , 10 > attachments;
+		LocalArray< Image , 10 > attachment_images;
+		LocalArray< ImageView , 10 > attachment_image_views;
 		uint attachment_count;
 		uint32_t current_image = 0;
 		uint width , height;
@@ -55,15 +55,15 @@ namespace VK
 		{
 			return attachment_count;
 		}
-		/*Attachment const &getCurrentAttachment() const
+		auto const &getCurrentAttachment() const
 		{
-			return attachments[ current_image ];
+			return attachment_images[ current_image ];
 		}
-		Attachment const &getAttachment( uint i ) const
+		auto const &getCurrentAttachmentView() const
 		{
-			return attachments[ i ];
-		}*/
-		static SwapChain create( Instance const &instance , Device const &dev , ObjectPool &pool , uint images_count , OS::Window const &window )
+			return attachment_image_views[ current_image ];
+		}
+		static SwapChain create( VkInstance instance , VkPhysicalDevice pdev , VkDevice dev , uint images_count , OS::Window const &window )
 		{
 			VkWin32SurfaceCreateInfoKHR surface_create_info;
 			Allocator::zero( &surface_create_info );
@@ -72,12 +72,12 @@ namespace VK
 			surface_create_info.hwnd = window.hwnd;
 			SwapChain out;
 			auto &surface = out.surface;
-			surface.handle.create( instance.getHandle() , surface_create_info );
-			vkGetPhysicalDeviceSurfaceFormatsKHR( instance.getPhysicalDevice().getHandle() , *surface.handle , &surface.formats.size , NULL );
-			vkGetPhysicalDeviceSurfaceFormatsKHR( instance.getPhysicalDevice().getHandle() , *surface.handle , &surface.formats.size , &surface.formats[ 0 ] );
-			vkGetPhysicalDeviceSurfaceCapabilitiesKHR( instance.getPhysicalDevice().getHandle() , *surface.handle , &surface.capabilities );
-			vkGetPhysicalDeviceSurfacePresentModesKHR( instance.getPhysicalDevice().getHandle() , *surface.handle , &surface.present_modes.size , nullptr );
-			vkGetPhysicalDeviceSurfacePresentModesKHR( instance.getPhysicalDevice().getHandle() , *surface.handle , &surface.present_modes.size , &surface.present_modes[ 0 ] );
+			surface.handle.create( instance , surface_create_info );
+			vkGetPhysicalDeviceSurfaceFormatsKHR( pdev , *surface.handle , &surface.formats.size , NULL );
+			vkGetPhysicalDeviceSurfaceFormatsKHR( pdev , *surface.handle , &surface.formats.size , &surface.formats[ 0 ] );
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR( pdev , *surface.handle , &surface.capabilities );
+			vkGetPhysicalDeviceSurfacePresentModesKHR( pdev , *surface.handle , &surface.present_modes.size , nullptr );
+			vkGetPhysicalDeviceSurfacePresentModesKHR( pdev , *surface.handle , &surface.present_modes.size , &surface.present_modes[ 0 ] );
 			if( surface.formats[ 0 ].format == VK_FORMAT_UNDEFINED )
 			{
 				surface.preffered_format.format = VK_FORMAT_B8G8R8A8_UNORM;
@@ -133,32 +133,38 @@ namespace VK
 			swap_chain_create_info.presentMode = surface.preffered_present_mode;
 			swap_chain_create_info.clipped = VK_TRUE;
 			swap_chain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-			out.handle.create( dev.getHandle() , swap_chain_create_info );
+			out.handle.create( dev , swap_chain_create_info );
 			uint image_count;
-			vkGetSwapchainImagesKHR( dev.getHandle() , *out.handle , &image_count , nullptr );
+			vkGetSwapchainImagesKHR( dev , *out.handle , &image_count , nullptr );
 			LocalArray< VkImage , 10 > images;
-			vkGetSwapchainImagesKHR( dev.getHandle() , *out.handle , &image_count , &images[ 0 ] );
-			out.dev_raw = dev.getHandle();
+			vkGetSwapchainImagesKHR( dev , *out.handle , &image_count , &images[ 0 ] );
+			out.dev_raw = dev;
 			out.width = swap_chain_extent.width;
 			out.height = swap_chain_extent.height;
 
 			ito( image_count )
 			{
 				Image image;
-				image.handle.init( dev.getHandle() , images[ i ] );
+				image.handle = images[ i ];
 				image.format = swap_chain_create_info.imageFormat;
 				image.layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-				image.dev_raw = dev.getHandle();
 				image.height = out.height;
 				image.width = out.width;
-				Attachment attachment;
-				attachment.view = std::move( image.createView(
-				{ VK_COMPONENT_SWIZZLE_R , VK_COMPONENT_SWIZZLE_G , VK_COMPONENT_SWIZZLE_B , VK_COMPONENT_SWIZZLE_A } ,
-				{ VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 }
-				) );
-				attachment.image = std::move( image );
-				pool.attachments.push( std::move( attachment ) );
-				pool.attachment_counter++;
+				out.attachment_images.push( image );
+				VkImageViewCreateInfo image_view_info;
+				Allocator::zero( &image_view_info );
+				image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+				image_view_info.format = image.format;
+				image_view_info.components = { VK_COMPONENT_SWIZZLE_R , VK_COMPONENT_SWIZZLE_G , VK_COMPONENT_SWIZZLE_B , VK_COMPONENT_SWIZZLE_A };
+				image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+				image_view_info.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 };
+				image_view_info.image = image.handle;
+				ImageView image_view;
+				image_view.handle = Factory< VkImageView >::create( dev , image_view_info );
+				image_view.range = image_view_info.subresourceRange;
+				image_view.format = image.format;
+				image_view.mapping = { VK_COMPONENT_SWIZZLE_R , VK_COMPONENT_SWIZZLE_G , VK_COMPONENT_SWIZZLE_B , VK_COMPONENT_SWIZZLE_A };
+				out.attachment_image_views.push( image_view );
 			}
 			return out;
 		}

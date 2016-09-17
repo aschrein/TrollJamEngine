@@ -2,6 +2,123 @@
 #include <engine/graphics/vulkan/defines.hpp>
 namespace VK
 {
+	template< typename T , typename C , VkResult( _stdcall *Constructor )( VkDevice , C const * , VkAllocationCallbacks const* , T * ) , void( _stdcall *Destructor )( VkDevice , T , VkAllocationCallbacks const* ) >
+	struct DevChildFactoryBase
+	{
+		static T create( VkDevice dev , C const &create_info , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			T out;
+			VKASSERTLOG( Constructor( dev , &create_info , alloc_callbacks , &out ) );
+			return out;
+		}
+		static void release( VkDevice dev , T val , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			Destructor( dev , val , alloc_callbacks );
+		}
+	};
+	template< typename T >
+	struct Factory
+	{
+	};
+	template<> struct Factory< VkSwapchainKHR > : public DevChildFactoryBase< VkSwapchainKHR , VkSwapchainCreateInfoKHR , vkCreateSwapchainKHR , vkDestroySwapchainKHR > {};
+	template<> struct Factory< VkCommandPool > : public DevChildFactoryBase< VkCommandPool , VkCommandPoolCreateInfo , vkCreateCommandPool , vkDestroyCommandPool > {};
+	template<> struct Factory< VkBuffer > : public DevChildFactoryBase< VkBuffer , VkBufferCreateInfo , vkCreateBuffer , vkDestroyBuffer > {};
+	template<> struct Factory< VkSemaphore > : public DevChildFactoryBase< VkSemaphore , VkSemaphoreCreateInfo , vkCreateSemaphore , vkDestroySemaphore > {};
+	template<> struct Factory< VkImage > : public DevChildFactoryBase< VkImage , VkImageCreateInfo , vkCreateImage , vkDestroyImage > {};
+	template<> struct Factory< VkImageView > : public DevChildFactoryBase< VkImageView , VkImageViewCreateInfo , vkCreateImageView , vkDestroyImageView > {};
+	template<> struct Factory< VkShaderModule > : public DevChildFactoryBase< VkShaderModule , VkShaderModuleCreateInfo , vkCreateShaderModule , vkDestroyShaderModule > {};
+	template<> struct Factory< VkRenderPass > : public DevChildFactoryBase< VkRenderPass , VkRenderPassCreateInfo , vkCreateRenderPass , vkDestroyRenderPass > {};
+	template<> struct Factory< VkFramebuffer > : public DevChildFactoryBase< VkFramebuffer , VkFramebufferCreateInfo , vkCreateFramebuffer , vkDestroyFramebuffer > {};
+	template<> struct Factory< VkDeviceMemory > : public DevChildFactoryBase< VkDeviceMemory , VkMemoryAllocateInfo , vkAllocateMemory , vkFreeMemory > {};
+	template<> struct Factory< VkPipelineLayout > : public DevChildFactoryBase< VkPipelineLayout , VkPipelineLayoutCreateInfo , vkCreatePipelineLayout , vkDestroyPipelineLayout > {};
+	template<> struct Factory< VkDescriptorPool > : public DevChildFactoryBase< VkDescriptorPool , VkDescriptorPoolCreateInfo , vkCreateDescriptorPool , vkDestroyDescriptorPool > {};
+	template<> struct Factory< VkDescriptorSetLayout > : public DevChildFactoryBase< VkDescriptorSetLayout , VkDescriptorSetLayoutCreateInfo , vkCreateDescriptorSetLayout , vkDestroyDescriptorSetLayout > {};
+	template<> struct Factory< VkSampler > : public DevChildFactoryBase< VkSampler , VkSamplerCreateInfo , vkCreateSampler , vkDestroySampler > {};
+	template<>
+	struct Factory< VkInstance >
+	{
+		static VkInstance create( VkInstanceCreateInfo const &create_info , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			VkInstance value;
+			VKASSERTLOG( vkCreateInstance( &create_info , alloc_callbacks , &value ) );
+			return value;
+		}
+		static void release( VkInstance value , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			vkDestroyInstance( value , alloc_callbacks );
+		}
+	};
+	template<>
+	struct Factory< VkDevice >
+	{
+		static VkDevice create( VkPhysicalDevice dev , VkDeviceCreateInfo const &create_info , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			VkDevice value;
+			VKASSERTLOG( vkCreateDevice( dev , &create_info , nullptr , &value ) );
+			return value;
+		}
+		static void release( VkDevice value , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			vkDestroyDevice( value , alloc_callbacks );
+		}
+	};
+	template<>
+	struct Factory< VkSurfaceKHR >
+	{
+		static VkSurfaceKHR create( VkInstance instance , VkWin32SurfaceCreateInfoKHR const &create_info , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			VkSurfaceKHR value;
+			VKASSERTLOG( vkCreateWin32SurfaceKHR( instance , &create_info , alloc_callbacks , &value ) );
+			return value;
+		}
+		static void release( VkInstance instance , VkSurfaceKHR value , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			vkDestroySurfaceKHR( instance , value , alloc_callbacks );
+		}
+	};
+	template<>
+	struct Factory< VkCommandBuffer >
+	{
+		static VkCommandBuffer create( VkDevice dev , VkCommandBufferAllocateInfo const &create_info )
+		{
+			VkCommandBuffer value;
+			VKASSERTLOG( vkAllocateCommandBuffers( dev , &create_info , &value ) );
+			return value;
+		}
+		static void release( VkDevice dev , VkCommandPool command_pool , VkCommandBuffer value )
+		{
+				vkFreeCommandBuffers( dev , command_pool , 1 , &value );
+		}
+	};
+	template<>
+	struct Factory< VkDescriptorSet >
+	{
+		static VkDescriptorSet create( VkDevice dev , VkDescriptorPool pool , VkDescriptorSetAllocateInfo const &create_info )
+		{
+			VkDescriptorSet value;
+			VKASSERTLOG( vkAllocateDescriptorSets( dev , &create_info , &value ) );
+			return value;
+		}
+		static void release( VkDevice dev , VkDescriptorPool pool , VkDescriptorSet value )
+		{
+			vkFreeDescriptorSets( dev , pool , 1 , &value );
+		}
+	};
+	template<>
+	struct Factory< VkPipeline >
+	{
+		static VkPipeline create( VkDevice dev , VkGraphicsPipelineCreateInfo const &create_info , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			VkPipeline value;
+			VKASSERTLOG( vkCreateGraphicsPipelines( dev , VK_NULL_HANDLE , 1 , &create_info , alloc_callbacks , &value ) );
+			return value;
+		}
+		static void release( VkDevice dev , VkPipeline value , VkAllocationCallbacks *alloc_callbacks = nullptr )
+		{
+			vkDestroyPipeline( dev , value , alloc_callbacks );
+		}
+	};
+
 	template< typename T >
 	struct UniqueBase
 	{

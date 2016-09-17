@@ -21,8 +21,8 @@ namespace Collections
 	template< typename T , int N >
 	struct LocalArray
 	{
+		uint size;
 		T data[ N ];
-		uint size = 0;
 		inline T const &operator[]( int i ) const
 		{
 			return data[ i ];

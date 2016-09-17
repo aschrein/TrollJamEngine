@@ -8,8 +8,6 @@ static Graphics::BitMap mapTGA( OS::Files::ImmutableFileView const &file )
 	file.setPosition( 12 );
 	out.width = file.getInc< uint16_t >();
 	out.height = file.getInc< uint16_t >();
-	out.depth = 1;
-	out.layers_count = 1;
 	out.mipmaps_count = 1;
 	byte bpp = file.getInc< byte >();
 	out.data = ( uint8_t* )file.getRaw() + 18;
