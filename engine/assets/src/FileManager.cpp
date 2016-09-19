@@ -139,22 +139,35 @@ void FileManagerImpl::mainLoop()
 			do
 			{
 				notify_info = ( FILE_NOTIFY_INFORMATION* )( buf + offset );
-				if( notify_info->Action == FILE_ACTION_MODIFIED && last_modified_file != String( filename ) )
+				if( notify_info->Action == FILE_ACTION_MODIFIED )
 				{
 					size_t converted;
 					notify_info->FileName[ notify_info->FileNameLength / 2 ] = '\0';
 					wcstombs_s( &converted , filename , MAX_PATH , notify_info->FileName , MAX_PATH );
-					last_modified_file = filename;
-					String full_filename = last_modified_file.replace( "\\" , "/" );
-					auto res = subscribers.get( full_filename );
-					if( res.isPresent() )
+					String full_filename = String( filename ).replace( "\\" , "/" );
+					if( last_modified_file != String( full_filename ) )
 					{
-						Array< FileConsumer* > consumers = subscribers.get( filename ).getValue();
-						for( auto &subscriber : consumers )
+						if( present_files.contains( full_filename ) )
 						{
-							subscriber->pushEvent( { filename , FileEvent::EventType::UPDATED } );
+							auto fres = OS::Files::load( dir_name + "/" + full_filename , allocator );
+							if( fres.isPresent() )
+							{
+								FileImage *file_image_ptr = present_files.get( full_filename ).getValue().get();
+								file_image_ptr->~FileImage();
+								*file_image_ptr = std::move( fres.getValue() );
+							}
+						}
+						auto res = subscribers.get( full_filename );
+						if( res.isPresent() )
+						{
+							Array< FileConsumer* > consumers = res.getValue();
+							for( auto &subscriber : consumers )
+							{
+								subscriber->pushEvent( { full_filename , FileEvent::EventType::UPDATED } );
+							}
 						}
 					}
+					last_modified_file = full_filename;
 				}
 				offset += notify_info->NextEntryOffset;
 			} while( notify_info->NextEntryOffset );

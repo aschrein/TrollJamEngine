@@ -4,6 +4,7 @@
 #include <engine/math/vec.hpp>
 #include <engine/math/RandomFactory.hpp>
 #include <engine/math/Math.hpp>
+#include <engine/data_struct/Array.hpp>
 namespace Physics
 {
 	using namespace Math;
@@ -55,7 +56,7 @@ namespace Physics
 	};
 	struct ConvexMesh
 	{
-		Array< Triangle > triangles;
+		Collections::Array< Triangle > triangles;
 	};
 	struct PysicsBodyProperties
 	{

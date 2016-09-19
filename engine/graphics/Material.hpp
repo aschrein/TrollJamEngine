@@ -17,6 +17,7 @@ namespace Graphics
 	};
 	struct AttributeInfo
 	{
+		uint offset;
 		AttributeSlot slot;
 		ComponentMapping component_mapping;
 	};

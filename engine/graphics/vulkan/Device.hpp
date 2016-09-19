@@ -7,13 +7,31 @@
 #include <engine/graphics/vulkan/Pass.hpp>
 #include <engine/graphics/vulkan/Pipeline.hpp>
 #include <engine/graphics/vulkan/Buffers.hpp>
-
+#include <engine/graphics/Graphics.hpp>
 namespace VK
 {
 	struct ShaderModuleDesc
 	{
 		VkShaderModule handle;
 		VkShaderStageFlagBits stage_flag;
+		LocalArray< uint , 10 > dependant_pipelines;
+	};
+	struct PipelineCreateInfo
+	{
+		uint renderpass;
+		uint subpass;
+		LocalArray< uint , 5 > stages;
+		LocalArray< DescriptorSetInfo , 5 > desc_info;
+		LocalArray< VkPushConstantRange , 5 > push_constants;
+		LocalArray< VkVertexInputBindingDescription , 10 > attrib_binding_info;
+		LocalArray< VkVertexInputAttributeDescription , 10 > attrib_info;
+		VkPrimitiveTopology topology;
+		LocalArray< VkPipelineColorBlendAttachmentState , 5 > color_blend_state_info;
+	};
+	struct PipelineDesc
+	{
+		PipelineCreateInfo create_info;
+		Pipeline pipeline;
 	};
 	class Device
 	{
@@ -30,7 +48,7 @@ namespace VK
 		ObjectPool< VkRenderPass > pass_pool;
 		ObjectPool< Image > image_pool;
 		ObjectPool< ImageView > image_view_pool;
-		ObjectPool< Pipeline > pipelines_pool;
+		ObjectPool< PipelineDesc > pipelines_pool;
 		ObjectPool< Memory > memory_pool;
 		ObjectPool< Buffer > buffer_pool;
 		Memory dev_mem;
@@ -121,13 +139,35 @@ namespace VK
 		}
 		Pair< uint , ShaderModuleDesc > createShaderModule( void const *data , uint size , VkShaderStageFlagBits stage_flag )
 		{
+			auto new_index = shader_module_pool.push( {} );
+			inplaceShaderModule( new_index , data , size , stage_flag );
+			return { new_index , shader_module_pool.objects[ new_index ] };
+		}
+		void inplaceShaderModule( uint index , void const *data , uint size , VkShaderStageFlagBits stage_flag )
+		{
 			VkShaderModuleCreateInfo shader_module_create_info;
 			Allocator::zero( &shader_module_create_info );
 			shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 			shader_module_create_info.codeSize = size;
 			shader_module_create_info.pCode = ( const uint32_t* )data;
-			ShaderModuleDesc out = { Factory< VkShaderModule >::create( getHandle() , shader_module_create_info ) , stage_flag };
-			return{ shader_module_pool.push( out ) , out };
+			ShaderModuleDesc out = { vkNew( getHandle() , shader_module_create_info ) , stage_flag ,{} };
+			shader_module_pool.objects[ index ] = out;
+		}
+		void releaseShaderModuleInplace( uint index )
+		{
+			auto module_desc = shader_module_pool.objects[ index ];
+			vkFree( handle , module_desc.handle );
+		}
+		void rebuildShaderModule( uint i , void const *data , uint size )
+		{
+			auto old_desc = shader_module_pool.objects[ i ];
+			releaseShaderModuleInplace( i );
+			inplaceShaderModule( i , data , size , old_desc.stage_flag );
+			shader_module_pool.objects[ i ].dependant_pipelines = old_desc.dependant_pipelines;
+			for( auto dependant_pipe : old_desc.dependant_pipelines )
+			{
+				rebuildPipline( dependant_pipe );
+			}
 		}
 		Pair< uint , VkSampler > createSampler( Graphics::SamplerCreateInfo const &info )
 		{
@@ -228,8 +268,12 @@ namespace VK
 				VkSubpassDescription subpass_desc;
 				Allocator::zero( &subpass_desc );
 				subpass_desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-				subpass_desc.colorAttachmentCount = sinfo.size;
-				subpass_desc.pColorAttachments = &sinfo[ 0 ];
+				subpass_desc.colorAttachmentCount = sinfo.color_attachments.size;
+				subpass_desc.pColorAttachments = &sinfo.color_attachments[ 0 ];
+				if( sinfo.use_depth_stencil )
+				{
+					subpass_desc.pDepthStencilAttachment = &sinfo.depth_stencil_attachment;
+				}
 				subpasses.push( subpass_desc );
 			}
 			
@@ -244,157 +288,82 @@ namespace VK
 			auto out = Factory< VkRenderPass >::create( getHandle() , render_pass_info );
 			return{ pass_pool.push( out ) , out };
 		}
-
-		Pair< uint , Pipeline > createPipeline(
-			VkRenderPass renderpass , uint subpass ,
-			LocalArray< ShaderModuleDesc , 5 > const &stages ,
-			LocalArray< DescriptorSetInfo , 5 > const &desc_info ,
-			LocalArray< VkPushConstantRange , 5 > const &push_constants ,
-			LocalArray< VkVertexInputBindingDescription , 10 > attrib_binding_info ,
-			LocalArray< VkVertexInputAttributeDescription , 10 > attrib_info ,
-			VkPrimitiveTopology topology ,
-			VkPipelineColorBlendStateCreateInfo color_blend_state_info
-		)
+		void addStageDependency( uint stage , uint pipeline )
 		{
-			LocalArray< VkDescriptorPoolSize , 10 > type_counts = {};
-			for( auto const &di : desc_info )
+			auto &stage_desc = shader_module_pool.objects[ stage ];
+			stage_desc.dependant_pipelines.push( pipeline );
+		}
+		void removeStageDependency( uint stage , uint pipeline )
+		{
+			auto &stage_desc = shader_module_pool.objects[ stage ];
+			ito( stage_desc.dependant_pipelines.size )
 			{
-				for( auto const &bn : di.bindings )
+				if( stage_desc.dependant_pipelines[ i ] == pipeline )
 				{
-					bool set = false;
-					for( auto &ps : type_counts )
-					{
-						if( ps.type == bn.descriptorType )
-						{
-							ps.descriptorCount += bn.descriptorCount;
-						}
-					}
-					if( !set )
-					{
-						type_counts.push( { bn.descriptorType , bn.descriptorCount } );
-					}
+					stage_desc.dependant_pipelines[ i ] = stage_desc.dependant_pipelines[ stage_desc.dependant_pipelines.size - 1 ];
+					stage_desc.dependant_pipelines.size--;
+					return;
 				}
 			}
-			Pipeline out = {};
-			if( type_counts.size )
+		}
+		void releasePipeline( uint index )
+		{
+			auto pipeline_desc = pipelines_pool.objects[ index ];
+			for( auto stage_index : pipeline_desc.create_info.stages )
 			{
-				VkDescriptorPoolCreateInfo desc_pool_info;
-				Allocator::zero( &desc_pool_info );
-				desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-				desc_pool_info.poolSizeCount = type_counts.size;
-				desc_pool_info.pPoolSizes = &type_counts[ 0 ];
-				desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-				desc_pool_info.maxSets = desc_info.size;
-				out.desc_pool = Factory< VkDescriptorPool >::create( getHandle() , desc_pool_info );
-				for( auto const &di : desc_info )
+				removeStageDependency( stage_index , index );
+			}
+			releasePipelineInplace( index );
+			pipelines_pool.free( index );
+		}
+		void releasePipelineInplace( uint index )
+		{
+			auto pipeline_desc = pipelines_pool.objects[ index ];
+			auto pipeline = pipeline_desc.pipeline;
+			if( pipeline.desc_pool )
+			{
+				vkFree( handle , pipeline.desc_pool );
+			}
+			vkFree( handle , pipeline.pipeline_layout );
+			for( auto desc_layout : pipeline.desc_set_layouts )
+			{
+				if( desc_layout )
 				{
-					VkDescriptorSetLayoutCreateInfo desc_set_layout_info;
-					Allocator::zero( &desc_set_layout_info );
-					desc_set_layout_info.bindingCount = di.bindings.size;
-					desc_set_layout_info.pBindings = &di.bindings[ 0 ];
-					desc_set_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-					auto layout = Factory< VkDescriptorSetLayout >::create( getHandle() , desc_set_layout_info );
-					VkDescriptorSetAllocateInfo desc_set_info = {};
-					desc_set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-					desc_set_info.descriptorPool = out.desc_pool;
-					desc_set_info.descriptorSetCount = 1;
-					desc_set_info.pSetLayouts = &layout;
-					auto desc_set = Factory< VkDescriptorSet >::create( getHandle() , out.desc_pool , desc_set_info );
-					out.desc_sets.push( std::move( desc_set ) );
-					out.desc_set_layouts.push( std::move( layout ) );
+					vkFree( handle , desc_layout );
 				}
 			}
-			LocalArray< VkPipelineShaderStageCreateInfo , 5 > infos = {};
-			for( auto const &stage : stages )
+			vkFree( handle , pipeline.handle );
+		}
+		void rebuildPipline( uint index )
+		{
+			auto pipeline_desc = pipelines_pool.objects[ index ].create_info;
+			releasePipelineInplace( index );
+			inplacePipeline( pipeline_desc , index );
+		}
+		void inplacePipeline( PipelineCreateInfo const &info , uint index )
+		{
+			LocalArray< Pair< VkShaderStageFlagBits , VkShaderModule > , 5 > stages = {};
+			for( auto stage_index : info.stages )
 			{
-				//auto &stage = shader_module_pool.objects[ stage_index ];
-				infos.push(
-				{
-					VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO ,
-					nullptr ,
-					0 ,
-					stage.stage_flag ,
-					stage.handle ,
-					"main" ,
-					nullptr
-				}
-				);
+				auto &stage = shader_module_pool.objects[ stage_index ];
+				stages.push( { stage.stage_flag , stage.handle } );
 			}
-			VkPipelineVertexInputStateCreateInfo vertex_state_create_info;
-			Allocator::zero( &vertex_state_create_info );
-			vertex_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-			vertex_state_create_info.pVertexBindingDescriptions = &attrib_binding_info[ 0 ];
-			vertex_state_create_info.vertexBindingDescriptionCount = attrib_binding_info.size;
-			vertex_state_create_info.pVertexAttributeDescriptions = &attrib_info[ 0 ];
-			vertex_state_create_info.vertexAttributeDescriptionCount = attrib_info.size;
-			VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info;
-			Allocator::zero( &input_assembly_create_info );
-			input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-			input_assembly_create_info.topology = topology;
-			input_assembly_create_info.primitiveRestartEnable = VK_FALSE;
-			LocalArray< VkDynamicState , 10 > dynamic_states = {};
-			dynamic_states.push( VK_DYNAMIC_STATE_SCISSOR );
-			dynamic_states.push( VK_DYNAMIC_STATE_VIEWPORT );
-			//dynamic_states.push( VK_DYNAMIC_STATE_LINE_WIDTH );
-			//dynamic_states.push( VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK );
-			//dynamic_states.push( VK_DYNAMIC_STATE_STENCIL_WRITE_MASK );
-			//dynamic_states.push( VK_DYNAMIC_STATE_STENCIL_REFERENCE );
-			VkPipelineDynamicStateCreateInfo dynamic_state = {};
-			dynamic_state.dynamicStateCount = dynamic_states.size;
-			dynamic_state.pDynamicStates = &dynamic_states[ 0 ];
-			dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-			VkPipelineViewportStateCreateInfo view_port_create_info;
-			Allocator::zero( &view_port_create_info );
-			view_port_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-			view_port_create_info.scissorCount = 1;
-			view_port_create_info.viewportCount = 1;
-			VkPipelineRasterizationStateCreateInfo rasterizer_state_create_info;
-			Allocator::zero( &rasterizer_state_create_info );
-			rasterizer_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-			rasterizer_state_create_info.polygonMode = VK_POLYGON_MODE_FILL;
-			rasterizer_state_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
-			rasterizer_state_create_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
-			rasterizer_state_create_info.lineWidth = 1.0f;
-			VkPipelineMultisampleStateCreateInfo multisample_state_create_info;
-			Allocator::zero( &multisample_state_create_info );
-			multisample_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-			multisample_state_create_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-			multisample_state_create_info.minSampleShading = 1.0f;
-			VkPipelineLayoutCreateInfo pipeline_layout_create_info;
-			Allocator::zero( &pipeline_layout_create_info );
-			pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			pipeline_layout_create_info.setLayoutCount = out.desc_set_layouts.size;
-			pipeline_layout_create_info.pSetLayouts = &out.desc_set_layouts[ 0 ];
-			pipeline_layout_create_info.pPushConstantRanges = &push_constants[ 0 ];
-			pipeline_layout_create_info.pushConstantRangeCount = push_constants.size;
-			out.pipeline_layout = Factory< VkPipelineLayout >::create( getHandle() , pipeline_layout_create_info );
-			VkPipelineDepthStencilStateCreateInfo pipelineDepthStencilStateCreateInfo = {};
-			pipelineDepthStencilStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-			pipelineDepthStencilStateCreateInfo.depthTestEnable = VK_FALSE;
-			pipelineDepthStencilStateCreateInfo.depthWriteEnable = VK_FALSE;
-			pipelineDepthStencilStateCreateInfo.stencilTestEnable = VK_FALSE;
-			pipelineDepthStencilStateCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-			pipelineDepthStencilStateCreateInfo.front = pipelineDepthStencilStateCreateInfo.back;
-			pipelineDepthStencilStateCreateInfo.back.compareOp = VK_COMPARE_OP_ALWAYS;
-			VkGraphicsPipelineCreateInfo pipeline_create_info;
-			Allocator::zero( &pipeline_create_info );
-			pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-			pipeline_create_info.stageCount = infos.size;
-			pipeline_create_info.pStages = &infos[ 0 ];
-			pipeline_create_info.pVertexInputState = &vertex_state_create_info;
-			pipeline_create_info.pInputAssemblyState = &input_assembly_create_info;
-			pipeline_create_info.pViewportState = &view_port_create_info;
-			pipeline_create_info.pRasterizationState = &rasterizer_state_create_info;
-			pipeline_create_info.pMultisampleState = &multisample_state_create_info;
-			pipeline_create_info.pColorBlendState = &color_blend_state_info;
-			pipeline_create_info.pDepthStencilState = &pipelineDepthStencilStateCreateInfo;
-			pipeline_create_info.layout = out.pipeline_layout;
-			pipeline_create_info.renderPass = renderpass;// pass_pool.objects[ renderpass ];
-			pipeline_create_info.subpass = subpass;
-			pipeline_create_info.basePipelineIndex = -1;
-			pipeline_create_info.pDynamicState = &dynamic_state;
-			out.handle = Factory< VkPipeline >::create( getHandle() , pipeline_create_info );
-			return{ pipelines_pool.push( out ) , out };
+			auto pipeline = vkCreate(
+				handle , pass_pool.objects[ info.renderpass ] , info.subpass , stages ,
+				info.desc_info , info.push_constants , info.attrib_binding_info , info.attrib_info ,
+				info.topology , info.color_blend_state_info
+			);
+			pipelines_pool.objects[ index ] = { info , pipeline };
+		}
+		Pair< uint , Pipeline > createPipeline( PipelineCreateInfo const &info )
+		{
+			uint new_index = pipelines_pool.push( {} );
+			for( auto stage_index : info.stages )
+			{
+				addStageDependency( stage_index , new_index );
+			}
+			inplacePipeline( info , new_index );
+			return{ new_index , pipelines_pool.objects[ new_index ].pipeline };
 		}
 		VkQueue getGraphicsQueue( uint index = 0 ) const
 		{

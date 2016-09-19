@@ -139,7 +139,11 @@ namespace Math
 		typedef MathUtil< T > M;
 		CALLMOD TVector< 2 , T > xy() const
 		{
-			return{ x , y };
+			return{ DATA[ 0 ] , DATA[ 1 ] };
+		}
+		CALLMOD TVector< 3 , T > xyz() const
+		{
+			return TVector< 3 , T >{ DATA[ 0 ] , DATA[ 1 ] , DATA[ 2 ] };
 		}
 		CALLMOD T const &operator[]( const int i ) const
 		{

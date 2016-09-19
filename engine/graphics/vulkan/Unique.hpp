@@ -16,10 +16,37 @@ namespace VK
 			Destructor( dev , val , alloc_callbacks );
 		}
 	};
+	
 	template< typename T >
 	struct Factory
 	{
 	};
+	template< typename T >
+	static void vkFree( VkDevice dev , T val , VkAllocationCallbacks *alloc_callbacks = nullptr )
+	{
+		Factory< T >::release( dev , val , alloc_callbacks );
+	}
+	template< typename C >
+	struct Derivative
+	{
+	};
+	template<> struct Derivative< VkDescriptorPoolCreateInfo > { typedef VkDescriptorPool Type; };
+	template<> struct Derivative< VkSwapchainCreateInfoKHR > { typedef VkSwapchainKHR Type; };
+	template<> struct Derivative< VkCommandPoolCreateInfo > { typedef VkCommandPool Type; };
+	template<> struct Derivative< VkBufferCreateInfo > { typedef VkBuffer Type; };
+	template<> struct Derivative< VkSemaphoreCreateInfo > { typedef VkSemaphore Type; };
+	template<> struct Derivative< VkImageCreateInfo > { typedef VkImage Type; };
+	template<> struct Derivative< VkImageViewCreateInfo > { typedef VkImageView Type; };
+	template<> struct Derivative< VkShaderModuleCreateInfo > { typedef VkShaderModule Type; };
+	template<> struct Derivative< VkRenderPassCreateInfo > { typedef VkRenderPass Type; };
+	template<> struct Derivative< VkFramebufferCreateInfo > { typedef VkFramebuffer Type; };
+	template<> struct Derivative< VkMemoryAllocateInfo > { typedef VkDeviceMemory Type; };
+	template<> struct Derivative< VkPipelineLayoutCreateInfo > { typedef VkPipelineLayout Type; };
+	template<> struct Derivative< VkSamplerCreateInfo > { typedef VkSampler Type; };
+	template<> struct Derivative< VkDescriptorSetLayoutCreateInfo > { typedef VkDescriptorSetLayout Type; };
+	template<> struct Derivative< VkDescriptorSetAllocateInfo > { typedef VkDescriptorSet Type; };
+	template<> struct Derivative< VkGraphicsPipelineCreateInfo > { typedef VkPipeline Type; };
+	
 	template<> struct Factory< VkSwapchainKHR > : public DevChildFactoryBase< VkSwapchainKHR , VkSwapchainCreateInfoKHR , vkCreateSwapchainKHR , vkDestroySwapchainKHR > {};
 	template<> struct Factory< VkCommandPool > : public DevChildFactoryBase< VkCommandPool , VkCommandPoolCreateInfo , vkCreateCommandPool , vkDestroyCommandPool > {};
 	template<> struct Factory< VkBuffer > : public DevChildFactoryBase< VkBuffer , VkBufferCreateInfo , vkCreateBuffer , vkDestroyBuffer > {};
@@ -34,6 +61,7 @@ namespace VK
 	template<> struct Factory< VkDescriptorPool > : public DevChildFactoryBase< VkDescriptorPool , VkDescriptorPoolCreateInfo , vkCreateDescriptorPool , vkDestroyDescriptorPool > {};
 	template<> struct Factory< VkDescriptorSetLayout > : public DevChildFactoryBase< VkDescriptorSetLayout , VkDescriptorSetLayoutCreateInfo , vkCreateDescriptorSetLayout , vkDestroyDescriptorSetLayout > {};
 	template<> struct Factory< VkSampler > : public DevChildFactoryBase< VkSampler , VkSamplerCreateInfo , vkCreateSampler , vkDestroySampler > {};
+	
 	template<>
 	struct Factory< VkInstance >
 	{
@@ -118,7 +146,16 @@ namespace VK
 			vkDestroyPipeline( dev , value , alloc_callbacks );
 		}
 	};
-
+	template< typename C >
+	static auto vkNew( VkDevice dev , C const &create_info , VkAllocationCallbacks *alloc_callbacks = nullptr ) -> typename Derivative< C >::Type
+	{
+		return Factory< Derivative< C >::Type >::create( dev , create_info , alloc_callbacks );
+	}
+	template< typename C , typename A >
+	static auto vkNew( VkDevice dev , A a , C const &create_info ) -> typename Derivative< C >::Type
+	{
+		return Factory< Derivative< C >::Type >::create( dev , a , create_info );
+	}
 	template< typename T >
 	struct UniqueBase
 	{

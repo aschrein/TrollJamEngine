@@ -31,7 +31,16 @@ namespace VK
 				clear_color.x , clear_color.y , clear_color.z , clear_color.w
 			};
 			vkCmdClearColorImage( *handle , image.handle ,
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL , cv , 1 , &range );
+				image.layout , cv , 1 , &range );
+		}
+		void clearDepthStencilImage( Image const &image , VkImageSubresourceRange range , float depth , byte stencil ) const
+		{
+			VkClearDepthStencilValue cv[] =
+			{
+				{ depth , stencil }
+			};
+			vkCmdClearDepthStencilImage( *handle , image.handle ,
+				image.layout , cv , 1 , &range );
 		}
 		void ImageBarrier( Image const &image , VkImageSubresourceRange range ,
 			VkAccessFlags src_access_flags , VkAccessFlags dst_access_flags , VkImageLayout layout ) const

@@ -10,10 +10,7 @@
 #include <Init.hpp>
 using namespace Math;
 using namespace Graphics;
-uint texture_handle = 0;
 FileManager *FileManager::singleton;
-DrawMeshInfo monkey_head_mesh;
-DrawMeshInfo plane_mesh;
 int main( int argc , char **argv )
 {
 	using namespace OS;
@@ -35,13 +32,29 @@ int main( int argc , char **argv )
 	uint uniform_buffer_handler;
 	uint uniform_buffer_handler1;
 	uint pipeline_handler;
+	uint index_count;
 	LockFree::RingBuffer< Pair< OS::InputState::State , OS::InputState::EventType > , 100 > input_events;
 	OS::Window window = OS::Window( { 100 , 100 , 512 , 512 ,
 		[ & ]()
 	{
 		renderer = window.createRenderingBackend();
 		auto cmd = renderer->createCommandQueue();
-		float vertices[] =
+		String mesh_filename = "Suzanne.mesh.b";
+		FileManager::singleton->loadFile( { mesh_filename } , local_file_consumer.get() );
+		Shared< FileImage > mesh_file;
+		int files = 1;
+		while( files )
+		{
+			FileEvent file_event = local_file_consumer->popEvent();
+			if( file_event.filename == mesh_filename )
+			{
+				mesh_file = std::move( file_event.file_result );
+				files--;
+			}
+		}
+		Mesh3D mesh = Assets::Mesh::deserialize( ( byte const * )mesh_file->getView().getRaw() );
+		index_count = mesh.indices.getSize();
+		/*float vertices[] =
 		{
 			-1.0f , -1.0f , 0.0f , 0.0f , 0.0f ,
 			1.0f , -1.0f , 0.0f , 1.0f , 0.0f ,
@@ -51,13 +64,14 @@ int main( int argc , char **argv )
 		uint indices[] =
 		{
 			0 , 1 , 2 , 0 , 2 , 3
-		};
-		LocalArray< AttributeInfo , 10 > attrib_infos = {};
+		};*/
+		
+		/*LocalArray< AttributeInfo , 10 > attrib_infos = {};
 		attrib_infos.push( { AttributeSlot::POSITION , { ComponentFormat::RGB , ComponentType::FLOAT32 } } );
-		attrib_infos.push( { AttributeSlot::TEXCOORD0 ,{ ComponentFormat::RG , ComponentType::FLOAT32 } } );
-		vertex_buffer_handler = cmd->createBuffer( { vertices , sizeof( vertices ) , Usage::STATIC , BufferTarget::INDEX_BUFFER } );
-		index_buffer_handler = cmd->createBuffer( { indices , sizeof( indices ) , Usage::STATIC , BufferTarget::INDEX_BUFFER } );
-		pipeline_handler = cmd->createPipeline( { attrib_infos } );
+		attrib_infos.push( { AttributeSlot::TEXCOORD0 ,{ ComponentFormat::RG , ComponentType::FLOAT32 } } );*/
+		vertex_buffer_handler = cmd->createBuffer( { &mesh.vertex_data[ 0 ] , mesh.vertex_data.getSize() , Usage::STATIC , BufferTarget::VERTEX_BUFFER } );
+		index_buffer_handler = cmd->createBuffer( { &mesh.indices[ 0 ] , sizeof( uint ) * mesh.indices.getSize() , Usage::STATIC , BufferTarget::INDEX_BUFFER } );
+		pipeline_handler = cmd->createPipeline( { mesh.stride , mesh.attrib_info } );
 		renderer->submitCommandQueue( cmd );
 		renderer->render();
 		init_signal.signal();
@@ -86,7 +100,7 @@ int main( int argc , char **argv )
 		Allocator::zero( &mesh_info );
 		mesh_info.index_buffer = { index_buffer_handler , 0 };
 		mesh_info.vertex_buffer = { vertex_buffer_handler , 0 };
-		mesh_info.index_count = 6;
+		mesh_info.index_count = index_count;
 		mesh_info.pipeline_handle = pipeline_handler;
 		Timer timer;
 		while( true )
@@ -218,9 +232,10 @@ int main( int argc , char **argv )
 			renderer->waitIdle();
 			timer.updateTime();
 			auto cmd = renderer->createCommandQueue();
-			qf rotation( { 0.0f , 0.0f , 1.0f } , timer.getCurrentTimeMilis() * 1.0e-3f );
-			mesh_info.rotation = rotation;
+			mesh_info.rotation = qf( { 0.0f , 0.0f , 1.0f } , timer.getCurrentTimeMilis() * 1.0e-3f );
 			cmd->drawIndexed( mesh_info );
+			mesh_info.rotation = qf( float3( 1.0f , 0.0f , 0.0f ).norm() , timer.getCurrentTimeMilis() * 1.0e-3f );
+			//cmd->drawIndexed( mesh_info );
 			renderer->submitCommandQueue( cmd );
 			renderer->render();
 		}

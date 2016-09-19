@@ -207,6 +207,25 @@ namespace Collections
 		{
 			return{ this , size };
 		}
+		void resize( uint new_size )
+		{
+			if( new_size < size )
+			{
+				for( int i = new_size; i < size; i++ )
+				{
+					data[ i ].~T();
+				}
+			}
+			new_size = MathUtil< uint >::min( new_size , real_size );
+			if( new_size > size )
+			{
+				for( int i = size; i < new_size; i++ )
+				{
+					new( data + i ) T();
+				}
+			}
+			size = new_size;
+		}
 		void make_space( uint new_size )
 		{
 			if( new_size < size )

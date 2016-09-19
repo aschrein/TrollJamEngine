@@ -44,6 +44,7 @@ namespace Graphics
 	};
 	struct PipelineCreateInfo
 	{
+		uint stride;
 		LocalArray< AttributeInfo , 10 > attributes;
 	};
 	class CommandQueue

@@ -102,6 +102,7 @@ namespace OS
 					allocator->free( this->data );
 					this->limit = 0;
 				}
+				Allocator::zero( this );
 			}
 		};
 		Options::Result< FileImage > load( String filename , Allocator *allocator = Allocator::singleton );

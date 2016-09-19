@@ -12,7 +12,7 @@ void drawIndexedDispatch( VKInterface::RenderingBackend *backend , VKInterface::
 	uint transfer_queue_index , void *data )
 {
 	Graphics::DrawMeshInfo const *info = ( Graphics::DrawMeshInfo const * )data;
-	auto &pipeline = backend->device.pipelines_pool.objects[ info->pipeline_handle ];
+	auto &pipeline = backend->device.pipelines_pool.objects[ info->pipeline_handle ].pipeline;
 	if( state.current_pipeline != info->pipeline_handle )
 	{
 		state.current_pipeline = info->pipeline_handle;
@@ -81,51 +81,44 @@ namespace Graphics
 			backend->device.releaseBuffer( tmp_buf_desc.key );
 		}
 	}
+
 	void createPipelineDispatch( VKInterface::RenderingBackend *backend , VKInterface::GraphicsState &state ,
 		VK::CommandBuffer const &graphics_cmd , VK::CommandBuffer const &transfer_cmd ,
 		uint transfer_queue_index , void *data )
 	{
 		auto *info = ( PipelineCreateInfo* )data;
-		VkPipelineColorBlendAttachmentState blender_state;
-		VkPipelineColorBlendStateCreateInfo blend_state_create_info;
+		
+		VkPipelineColorBlendAttachmentState blend_state_create_info;
 		{
-			Allocator::zero( &blender_state );
-			blender_state.blendEnable = VK_FALSE;
-			blender_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-			blender_state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-			blender_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-			blender_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-			blender_state.colorBlendOp = VK_BLEND_OP_ADD;
-			blender_state.alphaBlendOp = VK_BLEND_OP_ADD;
-			blender_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
 			Allocator::zero( &blend_state_create_info );
-			blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-			blend_state_create_info.logicOp = VK_LOGIC_OP_COPY;
-			blend_state_create_info.attachmentCount = 1;
-			blend_state_create_info.pAttachments = &blender_state;
+			blend_state_create_info.blendEnable = VK_FALSE;
+			blend_state_create_info.colorWriteMask = 0xf;
+			
 		}
 		LocalArray< VkVertexInputBindingDescription , 10 > attrib_binding_infos = {};
 		LocalArray< VkVertexInputAttributeDescription , 10 > attrib_infos = {};
-		uint stride = 0;
+		//uint stride = 0;
 		for( auto attrib_info : info->attributes )
 		{
 			attrib_infos.push(
 			{
 				( uint )attrib_info.slot , 0 ,
-				VK::getVK( attrib_info.component_mapping ) , stride
+				VK::getVK( attrib_info.component_mapping ) , attrib_info.offset
 			}
 			);
-			stride += getBpp( attrib_info.component_mapping );
+			//stride = getBpp( attrib_info.component_mapping );
 		}
-		attrib_binding_infos.push( { 0 , stride , VK_VERTEX_INPUT_RATE_VERTEX } );
-		auto pipeline = backend->device.createPipeline( backend->opaque_pass.pass , 0 ,
-		{ 2 , backend->device.shader_module_pool.objects[ 0 ] , backend->device.shader_module_pool.objects[ 1 ] } ,
-		{ 0 ,{ 1 ,{ { 0 , VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER , 1 , VK_SHADER_STAGE_ALL } } } } ,
-		{ 1 ,{ VK_SHADER_STAGE_VERTEX_BIT , 0 , 80 } } ,
-			attrib_binding_infos ,
-			attrib_infos  ,
-			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST , blend_state_create_info
+		attrib_binding_infos.push( { 0 , info->stride , VK_VERTEX_INPUT_RATE_VERTEX } );
+		auto pipeline = backend->device.createPipeline(
+		{
+			0 , 0 ,
+			{ 2 , 0 , 1 } ,
+			{ 0 ,{ 1 ,{ { 0 , VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER , 1 , VK_SHADER_STAGE_ALL } } } } ,
+			{ 1 ,{ VK_SHADER_STAGE_VERTEX_BIT , 0 , 80 } } ,
+				attrib_binding_infos ,
+				attrib_infos  ,
+				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST , { 1 , blend_state_create_info }
+		}
 		).value;
 	}
 	/*void createTextureDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
@@ -343,9 +336,9 @@ namespace VKInterface
 		auto render_semaphore = device.createSemaphore().value;
 		auto present_semaphore = device.createSemaphore().value;
 
-		FileConsumer *local_consumer = Allocator::singleton->alloc< FileConsumer >();
+		FileConsumer *local_consumer = allocator->alloc< FileConsumer >();
 		new( local_consumer ) FileConsumer();
-		Pointers::Unique< FileConsumer > local_file_consumer( local_consumer , Allocator::singleton );
+		Pointers::Unique< FileConsumer > local_file_consumer( local_consumer , allocator );
 		String vert_filename = "shaders/vk/simple.vert.spv";
 		String frag_filename = "shaders/vk/simple.frag.spv";
 		FileManager::singleton->loadFile( { frag_filename , vert_filename } , local_file_consumer.get() );
@@ -374,6 +367,8 @@ namespace VKInterface
 		{
 			VK::Image image;
 			VK::ImageView view;
+			VK::Image depth_image;
+			VK::ImageView depth_view;
 		};
 		RenderTarget rt;
 		rt.image = device.createImage2D(
@@ -381,13 +376,21 @@ namespace VKInterface
 			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
 		).value;
 		rt.view = device.createView2D( rt.image ).value;
+		rt.depth_image = device.createImage2D(
+			512 , 512 , 1 , 1 , VK_IMAGE_LAYOUT_UNDEFINED , VK_FORMAT_D32_SFLOAT_S8_UINT ,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+		).value;
+		rt.depth_view = device.createView2D( rt.depth_image ,
+		{} ,
+		{ VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT , 0 , 1 , 0 , 1 } ).value;
 		VK::PassInfo pass_info = {};
-		pass_info.subpasses.push( { 1 , { VK::defaultAttachmentRef( 0 ) } } );
-		pass_info.attachments.push( VK::defaultAttachmentDesc( rt.view.format ) );
+		pass_info.subpasses.push( { { 1 , { VK::defaultAttachmentRef( 0 ) } } , true , VK::defaultDepthStencilAttachmentRef( 1 ) } );
+		pass_info.attachments.push( VK::defaultAttachmentDesc( rt.image.format ) );
+		pass_info.attachments.push( VK::defaultDepthStencilAttachmentDesc( rt.depth_image.format ) );
 		opaque_pass.pass = device.createGraphicsRenderPass( pass_info ).value;
-		opaque_pass.frame_buffer = device.createFrameBuffer( opaque_pass.pass , { 1 , rt.view.handle } , { 512 , 512 } ).value;
-		auto vertex_module = device.createShaderModule( vert_file->getView().getRaw() , vert_file->getView().getLimit() , VK_SHADER_STAGE_VERTEX_BIT ).value;
-		auto fragment_module = device.createShaderModule( frag_file->getView().getRaw() , frag_file->getView().getLimit() , VK_SHADER_STAGE_FRAGMENT_BIT ).value;
+		opaque_pass.frame_buffer = device.createFrameBuffer( opaque_pass.pass , { 2 , rt.view.handle , rt.depth_view.handle } , { 512 , 512 } ).value;
+		auto vertex_module = device.createShaderModule( vert_file->getView().getRaw() , vert_file->getView().getLimit() , VK_SHADER_STAGE_VERTEX_BIT );
+		auto fragment_module = device.createShaderModule( frag_file->getView().getRaw() , frag_file->getView().getLimit() , VK_SHADER_STAGE_FRAGMENT_BIT );
 		
 		/*float vertices[] =
 		{
@@ -520,6 +523,17 @@ namespace VKInterface
 		timer.updateTime();
 		while( working_flag.isSet() )
 		{
+			while( !local_file_consumer->isEmpty() )
+			{
+				auto file_event = local_file_consumer->popEvent();
+				if( file_event.filename == vert_filename )
+				{
+					device.rebuildShaderModule( vertex_module.key , vert_file->getView().getRaw() , vert_file->getView().getLimit() );
+				} else if( file_event.filename == frag_filename )
+				{
+					device.rebuildShaderModule( fragment_module.key , frag_file->getView().getRaw() , frag_file->getView().getLimit() );
+				}
+			}
 			for( auto &cmd : swap_command_queues )
 			{
 				current_command_queues.push( cmd );
@@ -543,9 +557,17 @@ namespace VKInterface
 				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT ,
 				VK_ACCESS_COLOR_ATTACHMENT_READ_BIT , VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			);
+			graphics_cmd.ImageBarrier( rt.depth_image ,
+			{ VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT , 0 , 1 , 0 , 1 } ,
+				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT ,
+				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT , VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+			);
 			graphics_cmd.clearImage( rt.image , { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } , { 0.6f , 0.15f , 0.23f , 1.0f } );
-			VkClearValue clear_values[ 1 ] = { {0.0f , 1.0f , 0.0f , 1.0f} };
-			graphics_cmd.beginPass( opaque_pass.pass , opaque_pass.frame_buffer , { 0 , 0 , 512 , 512 } , clear_values , 1 );
+			graphics_cmd.clearDepthStencilImage( rt.depth_image , { VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT , 0 , 1 , 0 , 1 } , 1.0f , 0 );
+			VkClearValue clear_values[ 2 ];
+			clear_values[ 0 ].color = { 0.0f , 1.0f , 0.0f , 1.0f };
+			clear_values[ 1 ].depthStencil = { 1.0f , 0 };
+			graphics_cmd.beginPass( opaque_pass.pass , opaque_pass.frame_buffer , { 0 , 0 , 512 , 512 } , clear_values , 2 );
 			
 			//vkCmdSetLineWidth( graphics_cmd.getHandle() , 1.0f );
 			VkRect2D scissors[] =
@@ -555,7 +577,7 @@ namespace VKInterface
 			vkCmdSetScissor( graphics_cmd.getHandle() , 0 , 1 , scissors );
 			VkViewport viewports[] =
 			{
-				{ 0 , 0 , 512 , 512 }
+				{ 0 , 0 , 512 , 512 , 0.0f , 1.0f }
 			};
 			vkCmdSetViewport( graphics_cmd.getHandle() , 0 , 1 , viewports );
 
