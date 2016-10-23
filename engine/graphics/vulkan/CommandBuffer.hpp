@@ -43,7 +43,7 @@ namespace VK
 				image.layout , cv , 1 , &range );
 		}
 		void ImageBarrier( Image const &image , VkImageSubresourceRange range ,
-			VkAccessFlags src_access_flags , VkAccessFlags dst_access_flags , VkImageLayout layout ) const
+			VkAccessFlags src_access_flags , VkAccessFlags dst_access_flags , VkImageLayout layout , uint src_queue = VK_QUEUE_FAMILY_IGNORED , uint dst_queue = VK_QUEUE_FAMILY_IGNORED ) const
 		{
 			VkImageMemoryBarrier barrier;
 			Allocator::zero( &barrier );
@@ -52,8 +52,8 @@ namespace VK
 			barrier.dstAccessMask = dst_access_flags;
 			barrier.oldLayout = image.layout;
 			barrier.newLayout = layout;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.srcQueueFamilyIndex = src_queue;
+			barrier.dstQueueFamilyIndex = dst_queue;
 			barrier.srcQueueFamilyIndex = family;
 			barrier.dstQueueFamilyIndex = family;
 			barrier.image = image.handle;
@@ -61,6 +61,19 @@ namespace VK
 			vkCmdPipelineBarrier( *handle , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT ,
 				0 , 0 , nullptr , 0 , nullptr , 1 , &barrier );
 			image.layout = layout;
+		}
+		void bufferBarrier(Buffer const &buffer , VkAccessFlags src_access_flags , VkAccessFlags dst_access_flags , uint src_queue = VK_QUEUE_FAMILY_IGNORED , uint dst_queue = VK_QUEUE_FAMILY_IGNORED )
+		{
+			VkBufferMemoryBarrier bufbar = {};
+			bufbar.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+			bufbar.buffer = buffer.handle;
+			bufbar.size = buffer.size;
+			bufbar.srcQueueFamilyIndex = src_queue;
+			bufbar.dstQueueFamilyIndex = dst_queue;
+			bufbar.srcAccessMask = src_access_flags;
+			bufbar.dstAccessMask = dst_access_flags;
+			vkCmdPipelineBarrier( *handle , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT , VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT ,
+				0 , 0 , nullptr , 1 , &bufbar , 0 , nullptr );
 		}
 		void execSecondary( CommandBuffer const &cb ) const
 		{
@@ -101,9 +114,17 @@ namespace VK
 		{
 			vkCmdBindPipeline( getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pipeline );
 		}
+		void bindComputePipeline( VkPipeline pipeline ) const
+		{
+			vkCmdBindPipeline( getHandle() , VK_PIPELINE_BIND_POINT_COMPUTE , pipeline );
+		}
 		void bindGraphicsDescriptorSet( VkPipelineLayout pipeline_layout , VkDescriptorSet desc_set , uint set_id ) const
 		{
 			vkCmdBindDescriptorSets( getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pipeline_layout , set_id , 1 , &desc_set , 0 , NULL );
+		}
+		void bindComputeDescriptorSet( VkPipelineLayout pipeline_layout , VkDescriptorSet desc_set , uint set_id ) const
+		{
+			vkCmdBindDescriptorSets( getHandle() , VK_PIPELINE_BIND_POINT_COMPUTE , pipeline_layout , set_id , 1 , &desc_set , 0 , NULL );
 		}
 		void blit( Image const &dst , Image const &src , VkImageBlit const *blits , uint blit_count , VkFilter filter ) const
 		{

@@ -12,18 +12,40 @@ void drawIndexedDispatch( VKInterface::RenderingBackend *backend , VKInterface::
 	uint transfer_queue_index , void *data )
 {
 	Graphics::DrawMeshInfo const *info = ( Graphics::DrawMeshInfo const * )data;
-	auto &pipeline = backend->device.pipelines_pool.objects[ info->pipeline_handle ].pipeline;
+	auto &pipeline = backend->objects_pool.pipelines_pool[ info->pipeline_handle ].pipeline;
 	if( state.current_pipeline != info->pipeline_handle )
 	{
 		state.current_pipeline = info->pipeline_handle;
 		graphics_cmd.bindGraphicsPipeline( pipeline.handle );
-		vkCmdPushConstants( graphics_cmd.getHandle() , pipeline.pipeline_layout , VK_SHADER_STAGE_VERTEX_BIT , 16 , 64 , state.view_proj._data );
+		auto &texture = backend->objects_pool.texture_pool[ 0 ];
+		auto &image = backend->objects_pool.image_pool[ texture.image_index ];
+		auto &view = backend->objects_pool.image_view_pool[ texture.image_view_index ];
+		auto &sampler = backend->objects_pool.samplers_pool[ texture.sampler_index ];
+		VkWriteDescriptorSet write_desc;
+		Allocator::zero( &write_desc );
+		write_desc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write_desc.dstSet = pipeline.desc_sets[ 0 ];
+		write_desc.descriptorCount = 1;
+		write_desc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		VkDescriptorImageInfo image_info;
+		Allocator::zero( &image_info );
+		image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		image_info.imageView = view.handle;
+		image_info.sampler = sampler;
+		write_desc.pImageInfo = &image_info;
+		write_desc.dstBinding = 0;
+
+		vkUpdateDescriptorSets( backend->device.getHandle() , 1 , &write_desc , 0 , NULL );
+		vkCmdBindDescriptorSets( graphics_cmd.getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , pipeline.pipeline_layout , 0 , 1 , &pipeline.desc_sets[ 0 ] , 0 , NULL );
+		vkCmdPushConstants( graphics_cmd.getHandle() , pipeline.pipeline_layout , VK_SHADER_STAGE_VERTEX_BIT , 32 , 64 , state.view_proj._data );
+		vkCmdPushConstants( graphics_cmd.getHandle() , pipeline.pipeline_layout , VK_SHADER_STAGE_FRAGMENT_BIT , 96 , 16 , state.camera_pos.__data );
 	}
-	auto &buffer = backend->device.buffer_pool.objects[ info->vertex_buffer.buffer_handler ];
+	auto &buffer = backend->objects_pool.buffer_pool[ info->vertex_buffer.buffer_handler ];
 	VkDeviceSize offset = info->vertex_buffer.offset;
 	vkCmdBindVertexBuffers( graphics_cmd.getHandle() , 0 , 1 , &buffer.handle , &offset );
-	vkCmdBindIndexBuffer( graphics_cmd.getHandle() , backend->device.buffer_pool.objects[ info->index_buffer.buffer_handler ].handle , info->index_buffer.offset , VK::getVK( info->index_type ) );
+	vkCmdBindIndexBuffer( graphics_cmd.getHandle() , backend->objects_pool.buffer_pool[ info->index_buffer.buffer_handler ].handle , info->index_buffer.offset , VK::getVK( info->index_type ) );
 	vkCmdPushConstants( graphics_cmd.getHandle() , pipeline.pipeline_layout , VK_SHADER_STAGE_VERTEX_BIT , 0 , 16 , info->rotation.__data );
+	vkCmdPushConstants( graphics_cmd.getHandle() , pipeline.pipeline_layout , VK_SHADER_STAGE_VERTEX_BIT , 16 , 4 , &info->scale );
 	vkCmdDrawIndexed( graphics_cmd.getHandle() , info->index_count , 1 , info->start_index , 0 , 0 );
 }
 namespace Graphics
@@ -65,20 +87,21 @@ namespace Graphics
 		{
 			usage_flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 		}
-		VK::Buffer buffer = backend->device.createBuffer( usage_flags , VK::MemoryType::DEV_BUFFER , info->size ).value;
+		VK::Buffer buffer = VK::Handle< VK::Buffer >::create( backend->device , backend->objects_pool , backend->objects_counter , { usage_flags , VK::MemoryType::DEV_BUFFER , info->size } ).value;
 		if( info->data )
 		{
-			auto tmp_buf_desc = backend->device.createBuffer( VK_BUFFER_USAGE_TRANSFER_SRC_BIT , VK::MemoryType::HOST , info->size );
+			auto tmp_buf_desc = VK::Handle< VK::Buffer >::create( backend->device , backend->objects_pool , backend->objects_counter ,
+			{ VK_BUFFER_USAGE_TRANSFER_SRC_BIT , VK::MemoryType::HOST , info->size } );
 			VK::Buffer tmp_buf = tmp_buf_desc.value;
-			auto map = backend->device.map( tmp_buf );
+			auto map = backend->device.map( tmp_buf.mem_type , tmp_buf.offset , tmp_buf.size );
 			memcpy( map , info->data , info->size );
-			backend->device.unmap( tmp_buf );
+			backend->device.unmap( tmp_buf.mem_type );
 			transfer_cmd.begin();
 			transfer_cmd.copy( buffer , tmp_buf , { 0 , 0 , info->size } );
 			transfer_cmd.end();
 			backend->device.submitGraphicsCommandBuffer( transfer_queue_index , transfer_cmd );
 			backend->device.waitIdleGraphics( transfer_queue_index );
-			backend->device.releaseBuffer( tmp_buf_desc.key );
+			tmp_buf_desc.key.release( backend->device , backend->objects_pool );
 		}
 	}
 
@@ -108,43 +131,49 @@ namespace Graphics
 			);
 			//stride = getBpp( attrib_info.component_mapping );
 		}
-		attrib_binding_infos.push( { 0 , info->stride , VK_VERTEX_INPUT_RATE_VERTEX } );
-		auto pipeline = backend->device.createPipeline(
+		attrib_binding_infos.push( { 0 , info->stride , VK_VERTEX_INPUT_RATE_VERTEX } ); 
+		auto pipeline = VK::Handle< Pipeline >::create(
 		{
 			0 , 0 ,
 			{ 2 , 0 , 1 } ,
-			{ 0 ,{ 1 ,{ { 0 , VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER , 1 , VK_SHADER_STAGE_ALL } } } } ,
-			{ 1 ,{ VK_SHADER_STAGE_VERTEX_BIT , 0 , 80 } } ,
+			{ 1 , { 1 , { 0 , VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER , 1 , VK_SHADER_STAGE_ALL } } } ,
+			{ 2 , { { VK_SHADER_STAGE_VERTEX_BIT , 0 , 96 } , { VK_SHADER_STAGE_FRAGMENT_BIT , 96 , 16 } } } ,
 				attrib_binding_infos ,
 				attrib_infos  ,
 				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST , { 1 , blend_state_create_info }
 		}
 		).value;
 	}
-	/*void createTextureDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
+	void createTextureDispatch( VKInterface::RenderingBackend *backend , VKInterface::GraphicsState &state ,
+		VK::CommandBuffer const &graphics_cmd , VK::CommandBuffer const &transfer_cmd ,
+		uint transfer_queue_index , void *data )
 	{
 		auto *info = ( TextureCreateInfo* )data;
-		VK::Image texture_image = VK::Image::create(
-			backend->device , &backend->dev_texture_mem , info->bitmap.width , info->bitmap.height , info->bitmap.mipmaps_count ,
-			info->bitmap.layers_count , VK_IMAGE_LAYOUT_GENERAL , VK::getVK( info->bitmap.component_mapping ) ,
-			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT , VK_IMAGE_ASPECT_COLOR_BIT );
-
+		auto texture_image = backend->device.createImage2D(
+			info->bitmap.width , info->bitmap.height , info->bitmap.mipmaps_count ,
+			1 , VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL , VK::getVK( info->bitmap.component_mapping ) ,
+			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
 		VkBufferImageCopy copy_range;
 		Allocator::zero( &copy_range );
-		copy_range.imageExtent = { 4 , 4 , 1 };
+		copy_range.imageExtent = { info->bitmap.width , info->bitmap.height , 1 };
 		copy_range.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 0 , 1 };
-		VK::Buffer const *tmp_buffer = ( VK::Buffer const* )info->bitmap.data;
-		backend->cmd_buf.begin();
-		backend->cmd_buf.copy( texture_image , *tmp_buffer , &copy_range , 1 );
-		backend->cmd_buf.ImageBarrier( texture_image , { VK_IMAGE_ASPECT_COLOR_BIT , 0 , 1 , 0 , 1 } , VK_ACCESS_COLOR_ATTACHMENT_READ_BIT , VK_IMAGE_LAYOUT_GENERAL );
-		backend->cmd_buf.end();
-		backend->graphics_queue.submitCommandBuffer( backend->cmd_buf );
-		backend->graphics_queue.wait();
-		tmp_buffer->~Buffer();
-		backend->allocator->free( const_cast< VK::Buffer* >( tmp_buffer ) );
-		backend->object_pool.textures.push( std::move( texture_image ) );
+		auto tmp_buffer = backend->device.createBuffer( VK_BUFFER_USAGE_TRANSFER_SRC_BIT , VK::MemoryType::HOST , info->bitmap.size );
+		auto map = backend->device.map( tmp_buffer.value );
+		memcpy( map , info->bitmap.data , info->bitmap.size );
+		backend->device.unmap( tmp_buffer.value );
+		transfer_cmd.begin();
+		transfer_cmd.copy( texture_image.value , tmp_buffer.value , &copy_range , 1 );
+		transfer_cmd.ImageBarrier( texture_image.value , { VK_IMAGE_ASPECT_COLOR_BIT , 0 , info->bitmap.mipmaps_count , 0 , 1 } ,
+			VK_ACCESS_TRANSFER_WRITE_BIT , VK_ACCESS_TRANSFER_READ_BIT , VK_IMAGE_LAYOUT_GENERAL );
+		transfer_cmd.end();
+		backend->device.submitGraphicsCommandBuffer( transfer_queue_index , transfer_cmd );
+		backend->device.waitIdleGraphics( transfer_queue_index );
+		backend->device.releaseBuffer( tmp_buffer.key );
+		auto view = backend->device.createView2D( texture_image.value );
+		auto sampler = backend->device.createSampler( info->sampler_info );
+		backend->device.addTexture( { texture_image.key , view.key , sampler.key } );
 	}
-	void createTextureViewDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
+	/*void createTextureViewDispatch( VKInterface::RenderingBackend *backend , void *data , uint handler )
 	{
 		auto *info = ( TextureViewCreateInfo* )data;
 		auto &texture = backend->object_pool.textures[ info->texture_handler ];
@@ -260,6 +289,17 @@ namespace Graphics
 		thisgl->commands.push( VKInterface::Command{ createBufferDispatch , swap_desc } );
 		return thisgl->device->buffer_pool.counter++;
 	}
+	uint CommandQueue::createTexture( TextureCreateInfo const &desc )
+	{
+		VKInterface::CommandQueue* thisgl = ( VKInterface::CommandQueue* )this;
+		void *swap = thisgl->temp_allocator.alloc( desc.bitmap.size );
+		memcpy( swap , desc.bitmap.data , desc.bitmap.size );
+		TextureCreateInfo *swap_desc = ( TextureCreateInfo* )thisgl->temp_allocator.alloc( sizeof( TextureCreateInfo ) );
+		Allocator::copy( swap_desc , &desc );
+		swap_desc->bitmap.data = swap;
+		thisgl->commands.push( VKInterface::Command{ createTextureDispatch , swap_desc } );
+		return thisgl->device->texture_pool.counter++;
+	}
 	uint CommandQueue::createPipeline( PipelineCreateInfo const &desc )
 	{
 		VKInterface::CommandQueue* thisgl = ( VKInterface::CommandQueue* )this;
@@ -275,7 +315,7 @@ namespace Graphics
 		Allocator::zero( cmd_queue );
 		cmd_queue->device = &thisgl->device;
 
-		cmd_queue->temp_allocator = std::move( LinearAllocator( 4000 ) );
+		cmd_queue->temp_allocator = std::move( LinearAllocator( 20000 ) );
 		return cmd_queue;
 	}
 	void RenderingBackend::waitIdle()
@@ -618,7 +658,7 @@ namespace VKInterface
 				auto dset = current_pass->getDescriptorSet( 0 );
 				vkCmdBindDescriptorSets( backend->cmd_buf.getHandle() , VK_PIPELINE_BIND_POINT_GRAPHICS , current_pass->getPipelineLayout() , 0 , 1 , &dset , ub_offsets.size , &ub_offsets[ 0 ] );
 			}*/
-			GraphicsState state{ view_proj , -1 };
+			GraphicsState state{ view_proj ,{ 2.0f , 2.0f , 2.0f } , -1 };
 			for( auto &cmd_buf : current_command_queues )
 			{
 				for( auto &cmd : cmd_buf->commands )

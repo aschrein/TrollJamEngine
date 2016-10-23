@@ -263,7 +263,7 @@ namespace Math
 				return TVector< N , T >( static_cast< T >( 0 ) );
 			if( M::abs( m - 1.0f ) < M::EPS )
 				return *this;
-			return *this * ( 1.0f / m );
+			return *this / m;
 		}
 		CALLMOD TVector operator&( TVector const &v ) const
 		{

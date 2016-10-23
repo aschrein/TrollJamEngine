@@ -15,7 +15,7 @@ int main( int argc , char **argv )
 {
 	using namespace OS;
 	Unique< FileConsumer > local_file_consumer( new FileConsumer() );
-	FileManager::singleton = FileManager::create();
+	FileManager::singleton = FileManager::create( "../../assets" );
 	
 	float camera_angle_phi = 0.0f;
 	float camera_angle_thetha = 0.0f;
@@ -33,16 +33,19 @@ int main( int argc , char **argv )
 	uint uniform_buffer_handler1;
 	uint pipeline_handler;
 	uint index_count;
+	uint albedo_texture_handler;
 	LockFree::RingBuffer< Pair< OS::InputState::State , OS::InputState::EventType > , 100 > input_events;
 	OS::Window window = OS::Window( { 100 , 100 , 512 , 512 ,
 		[ & ]()
 	{
 		renderer = window.createRenderingBackend();
 		auto cmd = renderer->createCommandQueue();
-		String mesh_filename = "Suzanne.mesh.b";
-		FileManager::singleton->loadFile( { mesh_filename } , local_file_consumer.get() );
+		String mesh_filename = "Group24221.mesh";
+		String texture_filename = "nhead.tga";
+		FileManager::singleton->loadFile( { mesh_filename , texture_filename } , local_file_consumer.get() );
 		Shared< FileImage > mesh_file;
-		int files = 1;
+		Shared< FileImage > texture_file;
+		int files = 2;
 		while( files )
 		{
 			FileEvent file_event = local_file_consumer->popEvent();
@@ -50,9 +53,25 @@ int main( int argc , char **argv )
 			{
 				mesh_file = std::move( file_event.file_result );
 				files--;
+			} else if( file_event.filename == texture_filename )
+			{
+				texture_file = std::move( file_event.file_result );
+				files--;
 			}
 		}
-		Mesh3D mesh = Assets::Mesh::deserialize( ( byte const * )mesh_file->getView().getRaw() );
+		Mesh3D mesh = Assets::Mesh::parseSimpleMesh3d( ( char const * )mesh_file->getView().getRaw() );
+		//Assets::Mesh::deserialize( ( byte const * )mesh_file->getView().getRaw() );
+		auto texture_bitmap = parseTGA( texture_file->getView() );
+		albedo_texture_handler = cmd->createTexture(
+		{
+			texture_bitmap ,
+			{
+				Filter::LINEAR , Filter::LINEAR , false , 8 ,
+				WrapRegime::CLAMP , WrapRegime::CLAMP , WrapRegime::CLAMP
+			} ,
+			Usage::STATIC
+		}
+		);
 		index_count = mesh.indices.getSize();
 		/*float vertices[] =
 		{
@@ -232,9 +251,13 @@ int main( int argc , char **argv )
 			renderer->waitIdle();
 			timer.updateTime();
 			auto cmd = renderer->createCommandQueue();
-			mesh_info.rotation = qf( { 0.0f , 0.0f , 1.0f } , timer.getCurrentTimeMilis() * 1.0e-3f );
+			mesh_info.rotation =
+				qf( float3( 0.0f , 0.0f , 1.0f ).norm() , timer.getCurrentTimeMilis() * 1.0e-3f ) * 
+				qf( { 1.0f , 0.0f , 0.0f } ,  MathUtil< float >::PI * 0.5f );
+			mesh_info.scale = 1.2f;
 			cmd->drawIndexed( mesh_info );
 			mesh_info.rotation = qf( float3( 1.0f , 0.0f , 0.0f ).norm() , timer.getCurrentTimeMilis() * 1.0e-3f );
+			
 			//cmd->drawIndexed( mesh_info );
 			renderer->submitCommandQueue( cmd );
 			renderer->render();

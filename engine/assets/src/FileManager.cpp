@@ -17,6 +17,7 @@ public:
 	Unique< OS::Async::Thread > thread;
 	Signal signal;
 	AtomicFlag working_flag;
+	String asset_folder;
 	static const int MAX_PROMISES = 0x100;
 	HashMap< String , Array< FileConsumer* > > subscribers;
 	HashMap< String , Shared< FileImage > > present_files;
@@ -38,12 +39,13 @@ public:
 	void mainLoop();
 	FileManagerImpl() = default;
 };
-FileManager *FileManager::create( Allocator *allocator )
+FileManager *FileManager::create( String asset_folder , Allocator *allocator )
 {
 	FileManagerImpl *out = allocator->alloc< FileManagerImpl >();
 	new( out ) FileManagerImpl();
 	out->working_flag.set();
 	out->allocator = allocator;
+	out->asset_folder = asset_folder;
 	out->thread = OS::Async::Thread::create(
 		[ out ]()
 	{
@@ -74,12 +76,10 @@ void FileManager::loadFile(
 void FileManagerImpl::mainLoop()
 {
 	OS::IO::debugLogln( "file manager started execution" );
-	
-	String dir_name = "../../assets";
 #ifdef _WIN32
 	char buf[ 2048 ];
 	char filename[ MAX_PATH ];
-	HANDLE dir_handle = CreateFile( dir_name.getChars() , GENERIC_READ | FILE_LIST_DIRECTORY ,
+	HANDLE dir_handle = CreateFile( asset_folder.getChars() , GENERIC_READ | FILE_LIST_DIRECTORY ,
 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE ,
 		NULL , OPEN_EXISTING , FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED ,
 		NULL );
@@ -104,7 +104,7 @@ void FileManagerImpl::mainLoop()
 					promise_given.file_consumer->pushEvent( { filename , FileEvent::EventType::LOADED , present_files.get( filename ).getValue() } );
 				} else
 				{
-					auto fres = OS::Files::load( dir_name + "/" + filename , allocator );
+					auto fres = OS::Files::load( asset_folder + "/" + filename , allocator );
 					if( fres.isPresent() )
 					{
 						FileImage *file_image_ptr = allocator->alloc< FileImage >();
@@ -149,7 +149,7 @@ void FileManagerImpl::mainLoop()
 					{
 						if( present_files.contains( full_filename ) )
 						{
-							auto fres = OS::Files::load( dir_name + "/" + full_filename , allocator );
+							auto fres = OS::Files::load( asset_folder + "/" + full_filename , allocator );
 							if( fres.isPresent() )
 							{
 								FileImage *file_image_ptr = present_files.get( full_filename ).getValue().get();

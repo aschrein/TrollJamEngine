@@ -178,6 +178,16 @@ namespace VK
 			case Graphics::ComponentType::FLOAT32:
 				return VK_FORMAT_R32G32B32_SFLOAT;
 			}
+		case Graphics::ComponentFormat::BGR:
+			switch( mapping.type )
+			{
+			case Graphics::ComponentType::BYTE:
+				return VK_FORMAT_B8G8R8_UINT;
+			case Graphics::ComponentType::UNORM8:
+				return VK_FORMAT_B8G8R8_UNORM;
+			case Graphics::ComponentType::FIVE:
+				return VK_FORMAT_B5G5R5A1_UNORM_PACK16;
+			}
 		case Graphics::ComponentFormat::RG:
 			switch( mapping.type )
 			{
@@ -209,6 +219,8 @@ namespace VK
 				return VK_FORMAT_B8G8R8A8_UNORM;
 			case Graphics::ComponentType::UNORM16:
 				return VK_FORMAT_R16G16B16A16_UNORM;
+			case Graphics::ComponentType::FIVE:
+				return VK_FORMAT_B5G5R5A1_UNORM_PACK16;
 			}
 		}
 		return VK_FORMAT_UNDEFINED;

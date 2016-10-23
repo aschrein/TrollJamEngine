@@ -43,10 +43,12 @@ namespace Collections
 			do
 			{
 				break_pos++;
-				if( compare( text[ break_pos ] , escape_chars... ) )
+				char c = text[ break_pos ];
+				if( compare( c , escape_chars... ) )
 				{
 					break;
 				}
+				
 			} while( true );
 			return break_pos;
 		}

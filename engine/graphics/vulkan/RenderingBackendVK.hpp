@@ -6,6 +6,7 @@
 #include <engine/data_struct/Tuple.hpp>
 #include <engine/graphics/vulkan/CommandBuffer.hpp>
 #include <engine/graphics/vulkan/Device.hpp>
+#include <engine/graphics/vulkan/ObjectPool.hpp>
 #include <engine/os/Window.hpp>
 namespace VKInterface
 {
@@ -17,6 +18,7 @@ namespace VKInterface
 	struct GraphicsState
 	{
 		f4x4 view_proj;
+		float3 camera_pos;
 		int current_pipeline;
 	};
 	struct Command
@@ -57,6 +59,8 @@ namespace VKInterface
 			VkRenderPass pass;
 			VkFramebuffer frame_buffer;
 		} opaque_pass;
+		VK::ObjectsBlob objects_pool;
+		VK::ObjectsCounter objects_counter;
 		void mainloop();
 		void release();
 	};

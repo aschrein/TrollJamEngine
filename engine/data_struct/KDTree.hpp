@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 #include <engine/data_struct/Array.hpp>
 #include <engine/data_struct/HashSet.hpp>
 #include <engine/mem/Allocators.hpp>

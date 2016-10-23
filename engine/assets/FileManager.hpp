@@ -53,7 +53,7 @@ protected:
 	NONMOVABLE( FileManager );
 public:
 	static FileManager *singleton;
-	static FileManager *create( Allocator *allocator = Allocator::singleton );
+	static FileManager *create( String asset_folder , Allocator *allocator = Allocator::singleton );
 	~FileManager();
 	void loadFile(
 		Array< String > filenames ,

@@ -211,7 +211,7 @@ namespace Collections
 		{
 			if( new_size < size )
 			{
-				for( int i = new_size; i < size; i++ )
+				for( uint i = new_size; i < size; i++ )
 				{
 					data[ i ].~T();
 				}
@@ -219,7 +219,7 @@ namespace Collections
 			new_size = MathUtil< uint >::min( new_size , real_size );
 			if( new_size > size )
 			{
-				for( int i = size; i < new_size; i++ )
+				for( uint i = size; i < new_size; i++ )
 				{
 					new( data + i ) T();
 				}
@@ -230,7 +230,7 @@ namespace Collections
 		{
 			if( new_size < size )
 			{
-				for( int i = new_size; i < size; i++ )
+				for( uint i = new_size; i < size; i++ )
 				{
 					data[ i ].~T();
 				}
@@ -274,7 +274,7 @@ namespace Collections
 			}
 			if( new_size > size )
 			{
-				for( int i = size; i < new_size; i++ )
+				for( uint i = size; i < new_size; i++ )
 				{
 					new( data + i ) T();
 				}

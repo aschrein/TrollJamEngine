@@ -38,6 +38,13 @@ namespace OS
 			fwrite( data , 1 , length , file );
 			fclose( file );
 		}
+		void append( String filename , void const *data , uint length )
+		{
+			FILE *file = NULL;
+			fopen_s( &file , filename.getChars() , "ab" );
+			fwrite( data , 1 , length , file );
+			fclose( file );
+		}
 	}
 	void exec( String command )
 	{

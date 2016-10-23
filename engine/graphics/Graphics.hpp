@@ -32,6 +32,7 @@ namespace Graphics
 		uint start_index;
 		uint index_count;
 		uint pipeline_handle;
+		float scale;
 		qf rotation;
 		/*
 		uint material_id;
@@ -54,9 +55,10 @@ namespace Graphics
 		//void fillBuffer( uint dst_buffer , void const *data , uint offset , uint size );
 		uint createBuffer( BufferCreateInfo const &info );
 		uint createPipeline( PipelineCreateInfo const & );// , MaterialCreateInfo const & );
+		uint createTexture( TextureCreateInfo const &info );
 		//uint createMaterial( MaterialCreateInfo const *info );
 		/*
-		uint createTexture( TextureCreateInfo const *info );
+		
 		void freeBuffer( uint hndl );
 		void freeMaterial( uint hndl );
 		void freeTexture( uint hndl );*/

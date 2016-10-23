@@ -15,6 +15,94 @@ namespace VK
 		VkPipelineLayout pipeline_layout;
 		LocalArray< VkDescriptorSetLayout , 10 > desc_set_layouts;
 	};
+	struct ComputePipeline
+	{
+		VkPipeline handle;
+		VkDescriptorPool desc_pool;
+		LocalArray< VkDescriptorSet , 10 > desc_sets;
+		VkPipelineLayout pipeline_layout;
+		LocalArray< VkDescriptorSetLayout , 10 > desc_set_layouts;
+	};
+	static ComputePipeline vkCreate(
+		VkDevice device ,
+		VkShaderModule  stage ,
+		LocalArray< DescriptorSetInfo , 5 > const &desc_info ,
+		LocalArray< VkPushConstantRange , 5 > const &push_constants
+	)
+	{
+		LocalArray< VkDescriptorPoolSize , 10 > type_counts = {};
+		for( auto const &di : desc_info )
+		{
+			for( auto const &bn : di.bindings )
+			{
+				bool set = false;
+				for( auto &ps : type_counts )
+				{
+					if( ps.type == bn.descriptorType )
+					{
+						ps.descriptorCount += bn.descriptorCount;
+					}
+				}
+				if( !set )
+				{
+					type_counts.push( { bn.descriptorType , bn.descriptorCount } );
+				}
+			}
+		}
+		ComputePipeline out = {};
+		if( type_counts.size )
+		{
+			VkDescriptorPoolCreateInfo desc_pool_info;
+			Allocator::zero( &desc_pool_info );
+			desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			desc_pool_info.poolSizeCount = type_counts.size;
+			desc_pool_info.pPoolSizes = &type_counts[ 0 ];
+			desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+			desc_pool_info.maxSets = desc_info.size;
+			out.desc_pool = vkNew( device , desc_pool_info );
+			for( auto const &di : desc_info )
+			{
+				VkDescriptorSetLayoutCreateInfo desc_set_layout_info;
+				Allocator::zero( &desc_set_layout_info );
+				desc_set_layout_info.bindingCount = di.bindings.size;
+				desc_set_layout_info.pBindings = &di.bindings[ 0 ];
+				desc_set_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				auto layout = vkNew( device , desc_set_layout_info );
+				VkDescriptorSetAllocateInfo desc_set_info = {};
+				desc_set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				desc_set_info.descriptorPool = out.desc_pool;
+				desc_set_info.descriptorSetCount = 1;
+				desc_set_info.pSetLayouts = &layout;
+				auto desc_set = vkNew( device , out.desc_pool , desc_set_info );
+				out.desc_sets.push( desc_set );
+				out.desc_set_layouts.push( layout );
+			}
+		}
+		VkPipelineShaderStageCreateInfo stage_create_info =
+		{
+			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO ,
+			nullptr ,
+			0 ,
+			VK_SHADER_STAGE_COMPUTE_BIT ,
+			stage ,
+			"main" ,
+			nullptr
+		};
+		VkPipelineLayoutCreateInfo pipeline_layout_create_info;
+		Allocator::zero( &pipeline_layout_create_info );
+		pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipeline_layout_create_info.setLayoutCount = out.desc_set_layouts.size;
+		pipeline_layout_create_info.pSetLayouts = &out.desc_set_layouts[ 0 ];
+		pipeline_layout_create_info.pPushConstantRanges = &push_constants[ 0 ];
+		pipeline_layout_create_info.pushConstantRangeCount = push_constants.size;
+		out.pipeline_layout = vkNew( device , pipeline_layout_create_info );
+		VkComputePipelineCreateInfo create_info = {};
+		create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		create_info.layout = out.pipeline_layout;
+		create_info.stage = stage_create_info;
+		vkCreateComputePipelines( device , VK_NULL_HANDLE , 1 , &create_info , nullptr , &out.handle );
+		return out;
+	}
 	static Pipeline vkCreate( VkDevice device ,
 		VkRenderPass renderpass , uint subpass ,
 		LocalArray< Pair< VkShaderStageFlagBits , VkShaderModule > , 5 > const &stages ,

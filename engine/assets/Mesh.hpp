@@ -3,6 +3,7 @@
 #include <engine/mem/Allocators.hpp>
 #include <engine/data_struct/String.hpp>
 #include <engine/data_struct/StringStream.hpp>
+#include <engine/data_struct/KDTree.hpp>
 #include <engine/components/Reflection.hpp>
 #include <engine/graphics/Material.hpp>
 struct TestVertex
@@ -25,7 +26,7 @@ namespace Collections
 	{
 		static uint hashFunc( TestVertex const &val )
 		{
-			return uint( val.pos.x + val.pos.y * 0xff + val.pos.z * 0xffff ) + uint( val.uv.x + val.uv.y * 0xffff ) * 0xffff;
+			return uint( val.pos.x + val.pos.y * 0xff + val.pos.z * 0xffff ) - uint( val.uv.x + val.uv.y * 0xffff ) * 0xffff;
 		}
 	};
 }
@@ -106,13 +107,19 @@ namespace Assets
 			Array< uint > texture_faces;
 			texture_faces.setAllocator( allocator );
 			String texture_filename( allocator );
+			float mesh_bound = 0.0f;
 			while( area_name != "" )
 			{
 				if( area_name == "POSITION" )
 				{
 					while( ( area_name = ss.getString( ' ' , '\n' , '\r' ) ) == "v" )
 					{
-						positions.push( ss.getVec3() );
+						auto pos = ss.getVec3();
+						positions.push( pos );
+						//avg_pos += pos;
+						//mesh_bound = MathUtil< float >::max( mesh_bound , MathUtil< float >::abs( pos.x ) );
+						//mesh_bound = MathUtil< float >::max( mesh_bound , MathUtil< float >::abs( pos.y ) );
+						//mesh_bound = MathUtil< float >::max( mesh_bound , MathUtil< float >::abs( pos.z ) );
 					}
 					//OS::IO::debugLogln( positions.getSize() );
 				} else if( area_name == "NORMAL" )
@@ -138,7 +145,7 @@ namespace Assets
 					}
 				} else if( area_name == "TEXTURE_FACE" )
 				{
-					while( ( area_name = ss.getString( ' ' , '\n' , '\r' ) ) == "f" )
+					while( ( area_name = ss.getString( ' ' , '\n' , '\r' , '\0' ) ) == "f" )
 					{
 						auto face = ss.getiVec3();
 						texture_faces.push( face.x );
@@ -150,6 +157,8 @@ namespace Assets
 					break;
 				}
 			}
+			//OS::IO::debugLogln( "done reading" );
+			//avg_pos /= positions.getSize();
 			struct Vertex
 			{
 				float3 pos;
@@ -164,8 +173,8 @@ namespace Assets
 				uint pad4;
 			};
 			uint N = positions.getSize();
+			//KDTree< Vertex , float , 5 > vertex_tree( { 0.0f } , mesh_bound , allocator );
 			HashMap< TestVertex , uint > gather_map;
-			gather_map.setAllocator( allocator );
 			uint M = vertex_faces.getSize();
 			Array< Vertex > vertex_gather;
 			vertex_gather.setAllocator( allocator );
@@ -173,14 +182,35 @@ namespace Assets
 			Array< uint > gathered_indices;
 			gathered_indices.setAllocator( allocator );
 			gathered_indices.setIncrement( 100 );
+			struct TempVertex
+			{
+				float3 pos;
+				float3 norm;
+				float3 tangent;
+				float3 binormal;
+			};
+			/*ito( M / 3 )
+			{
+				auto p0 = vertex_faces[ i * 3 ];
+				auto p1 = vertex_faces[ i * 3 + 1 ];
+				auto p2 = vertex_faces[ i * 3 + 2 ];
+
+			}*/
 			ito( M )
 			{
 				auto wpos_index = vertex_faces[ i ];
 				auto uvpos_index = texture_faces[ i ];
-				TestVertex test_vertex{
+				TestVertex test_vertex
+				{
 					positions[ wpos_index ] ,
 					tex_coords[ uvpos_index ]
 				};
+				/*float err = 1.0e-6f;
+				auto index_res = vertex_tree.getCollided(
+				{
+					test_vertex.pos.x , test_vertex.pos.y , test_vertex.pos.z , test_vertex.uv.x , test_vertex.uv.y ,
+					err , err , err , err , err
+				} );*/
 				auto index_res = gather_map.get( test_vertex );
 				if( index_res.isPresent() )
 				{
@@ -190,7 +220,7 @@ namespace Assets
 				{
 					Vertex vertex;
 					vertex.pos = positions[ wpos_index ];
-					vertex.norm = positions[ wpos_index ];
+					vertex.norm = normals[ wpos_index ];
 					vertex.uv = tex_coords[ uvpos_index ];
 					uint new_index = vertex_gather.getSize();
 					vertex_gather.push( vertex );
@@ -198,7 +228,7 @@ namespace Assets
 					gather_map.push( test_vertex , new_index );
 				}
 			}
-			ito( gathered_indices.getSize() / 3 )
+			ito( M / 3 )
 			{
 				int i0 = gathered_indices[ i * 3 ];
 				int i1 = gathered_indices[ i * 3 + 1 ];
@@ -211,13 +241,15 @@ namespace Assets
 				float3 norm = ( p1 ^ p2 ).norm();
 				float2 t1 = v1.uv - v0.uv;
 				float2 t2 = v2.uv - v0.uv;
-				f2x2 uv_mat(
-					t2.y , -t2.x ,
-					-t1.x , t1.y
+				f2x2 src_uv_mat(
+					t1.x , t2.x ,
+					t1.y , t2.y
 				);
-				float2 a = MatUtil::inv( uv_mat ) * float2( 1.0f , 0.0f );
+				auto uv_mat = MatUtil::inv( src_uv_mat );
+				//auto r = src_uv_mat * uv_mat;
+				float2 a = uv_mat * float2( 1.0f , 0.0f );
 				float3 tang = ( p1 * a.x + p2 * a.y ).norm();
-				a = MatUtil::inv( uv_mat ) * float2( 0.0f , 1.0f );
+				a = uv_mat * float2( 0.0f , 1.0f );
 				float3 binorm = ( p1 * a.x + p2 * a.y ).norm();
 				v0.tang = tang;
 				v1.tang = tang;
@@ -225,21 +257,28 @@ namespace Assets
 				v0.binorm = binorm;
 				v1.binorm = binorm;
 				v2.binorm = binorm;
-				if( MathUtil< float >::abs( binorm * norm ) > 1.0e-4f )
+				/*v0.norm += norm;
+				v1.norm += norm;
+				v2.norm += norm;*/
+				//float nm = v0.norm.mod2();
+				//nm = v0.norm.mod2();
+				/*if( MathUtil< float >::abs( 1.0f - v0.norm.mod2() ) > 1.0e-4f )
 				{
 					OS::IO::debugLogln( "error while calculating tangent space" );
-				}
+				}*/
 			}
 			Array< byte > vertex_data;
 			vertex_data.setAllocator( allocator );
 			vertex_data.make_space( vertex_gather.getSize() * sizeof( Vertex ) );
 			vertex_data.resize( vertex_gather.getSize() * sizeof( Vertex ) );
 			Vertex *vertex_ptr = ( Vertex* )&vertex_data[ 0 ];
-			ito( vertex_gather.getSize() )
+			/*ito( vertex_gather.getSize() )
 			{
-				vertex_ptr[ i ] = vertex_gather[ i ];
-			}
-			//Allocator::copy( ( float3* )&vertex_data[ 0 ] , &positions[ 0 ] , positions.getSize() );
+				vertex_gather[ i ].binorm = vertex_gather[ i ].binorm.norm();
+				vertex_gather[ i ].tang = vertex_gather[ i ].tang.norm();
+				vertex_gather[ i ].norm = vertex_gather[ i ].norm.norm();
+			}*/
+			Allocator::copy( vertex_ptr , &vertex_gather[ 0 ] , vertex_gather.getSize() );
 			return
 			{
 				sizeof( Vertex ) ,

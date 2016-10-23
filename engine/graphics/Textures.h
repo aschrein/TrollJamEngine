@@ -52,7 +52,7 @@ namespace Graphics
 		uint width;
 		uint height;
 		uint mipmaps_count;
-		ImageCompression compression;
+		//ImageCompression compression;
 		ComponentMapping component_mapping;
 		uint getBpp() const
 		{

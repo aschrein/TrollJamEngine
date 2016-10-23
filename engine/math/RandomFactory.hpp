@@ -9,13 +9,12 @@ namespace Math
 	public:
 		typedef TVector< 3 , T > vec3;
 		typedef TVector< 2 , T > vec2;
-		static vec3 getRandomHalfSphere( float k )
+		static vec3 getRandomHalfSphere()
 		{
 			float phi = MathUtil<T>::randomUniform() * Math<T>::PI * 2.0f;
 			float cp = MathUtil<T>::cos( phi );
 			float sp = MathUtil<T>::sin( phi );
 			float ct = MathUtil<T>::randomUniform();
-			ct = MathUtil<T>::sin( ct * PI * 0.5f ) * k + ct * ( 1.0f - k );
 			float st = MathUtil<T>::sqrt( 1.0f - ct * ct );
 			return vec3( st * cp , st * sp , ct );
 		}
